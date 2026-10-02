@@ -1,0 +1,15 @@
+# golden transcript: corrupt-bare
+# spec: corrupt=APPL_DB:[PORT_TABLE:Ethernet0]:mtu=1500
+# box: bare
+# injector: corrupt(db=APPL_DB,key=PORT_TABLE:Ethernet0,mtu=1500)
+== apply
+shell: sonic-db-cli APPL_DB HGETALL PORT_TABLE:Ethernet0
+shell: sonic-db-cli APPL_DB HSET PORT_TABLE:Ethernet0 mtu 1500
+shell: sonic-db-cli APPL_DB HGETALL PORT_TABLE:Ethernet0
+!! apply raised RuntimeError: corrupt: write to APPL_DB 'PORT_TABLE:Ethernet0' on dut1 did not take effect (read back {}). The DB may have rejected it, or the owning daemon overwrote it instantly.
+== status
+shell: sonic-db-cli APPL_DB HGETALL PORT_TABLE:Ethernet0
+-> {"achieved": {"mtu": null}, "active": false, "delete": false, "fields": ["mtu"], "present": false}
+== release
+shell: sonic-db-cli APPL_DB DEL PORT_TABLE:Ethernet0
+-> null

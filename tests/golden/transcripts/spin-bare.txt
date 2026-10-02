@@ -1,0 +1,25 @@
+# golden transcript: spin-bare
+# spec: spin=orchagent:70
+# box: bare
+# injector: spin(container=swss,percent=70,process=orchagent,settle=20,ttl=300)
+== apply
+shell: id -u
+shell: sudo -n docker exec swss sh -c 'sha256sum /sonic-chaos/sonic_chaos_spin.so 2>/dev/null'
+copy: src <pkg>/shim/build/sonic_chaos_spin.so -> /tmp/sonic_chaos_spin.so mode=None
+shell: sudo -n docker exec -i swss sh -c 'mkdir -p /sonic-chaos && cat > /sonic-chaos/sonic_chaos_spin.so.tmp && chmod 0755 /sonic-chaos/sonic_chaos_spin.so.tmp && mv /sonic-chaos/sonic_chaos_spin.so.tmp /sonic-chaos/sonic_chaos_spin.so' < /tmp/sonic_chaos_spin.so
+shell: sudo -n rm -f /tmp/sonic_chaos_spin.so
+shell: sudo -n docker exec swss sh -c 'LD_PRELOAD=/sonic-chaos/sonic_chaos_spin.so /bin/true 2>&1'
+shell: sudo -n docker exec swss sh -c 'test -f /usr/bin/orchagent.sh'
+shell: sudo -n docker exec swss sh -c 'cp -n /usr/bin/orchagent.sh /usr/bin/orchagent.sh.sonic-chaos-bak'
+shell: sudo -n docker exec swss sh -c 'grep -c sonic-chaos /usr/bin/orchagent.sh'
+shell: sudo -n docker exec swss sh -c 'sed -i '"'"'/^exec /i export LD_PRELOAD="/sonic-chaos/sonic_chaos_spin.so"'"'"' /usr/bin/orchagent.sh'
+shell: sudo -n docker exec swss sh -c 'grep -c sonic-chaos /usr/bin/orchagent.sh'
+!! apply raised RuntimeError: [spin] /usr/bin/orchagent.sh has no `exec` line to wire on dut1 -- the daemon is not started the way this expects
+== status
+shell: sudo -n docker exec swss sh -c 'cat /sonic-chaos/spin_stats.json 2>/dev/null'
+shell: sudo -n docker exec swss sh -c 'grep sonic_chaos_spin.so /proc/$(pgrep -x orchagent | head -1)/maps 2>/dev/null'
+-> {"active": false, "loaded": false, "reason": "no stats file; the interposer has not run yet", "requested": 70}
+== release
+shell: sudo -n docker exec swss sh -c 'rm -f /sonic-chaos/spin_control.json'
+shell: sudo -n docker exec swss sh -c '[ -e /sonic-chaos/spin_control.json ] && echo present || echo gone'
+!! release raised RuntimeError: [spin] could not remove /sonic-chaos/spin_control.json in the swss container on dut1 (no answer): the fault may still be armed. The dead-man stays armed and removes it at ttl; check the container before relying on this box.

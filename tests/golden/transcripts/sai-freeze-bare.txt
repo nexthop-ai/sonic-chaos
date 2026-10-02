@@ -1,0 +1,17 @@
+# golden transcript: sai-freeze-bare
+# spec: sai=mode=freeze
+# box: bare
+# injector: sai(count=0,delay=0,drop=false,mode=freeze,object_type=all,op=all,settle=20,status=,ttl=600)
+== apply
+shell: id -u
+shell: sudo -n docker exec syncd sh -c 'pkill -STOP -x syncd'
+shell: sudo -n mkdir -p /tmp/sonic-chaos && sudo -n chmod 1777 /tmp/sonic-chaos
+shell: mkdir -p /tmp/sonic-chaos && cat > /tmp/sonic-chaos/sai-freeze.sh <<'CHAOS_EOF'\nsleep 600\nsudo -n docker exec syncd sh -c 'pkill -CONT -x syncd'\nrm -f /tmp/sonic-chaos/sai-freeze.pid /tmp/sonic-chaos/sai-freeze.sh\nCHAOS_EOF\nnohup setsid sh /tmp/sonic-chaos/sai-freeze.sh >/tmp/sonic-chaos/sai-freeze.log 2>&1 </dev/null &\necho $! > /tmp/sonic-chaos/sai-freeze.pid && cat /tmp/sonic-chaos/sai-freeze.pid
+-> null
+== status
+shell: sudo -n docker exec syncd sh -c 'cat /proc/$(pgrep -x syncd | head -1)/stat 2>/dev/null | awk '"'"'{print $3}'"'"''
+-> {"active": false, "mode": "freeze", "syncd_state": null}
+== release
+shell: if [ -f /tmp/sonic-chaos/sai-freeze.pid ]; then p=$(cat /tmp/sonic-chaos/sai-freeze.pid); kill -- -"$p" 2>/dev/null; kill "$p" 2>/dev/null; fi; rm -f /tmp/sonic-chaos/sai-freeze.pid /tmp/sonic-chaos/sai-freeze.sh /tmp/sonic-chaos/sai-freeze.log; true
+shell: sudo -n docker exec syncd sh -c 'pkill -CONT -x syncd'
+-> null

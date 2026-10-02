@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# Distribution and CLI name. The import name is sonic_chaos.
+name = "sonic-chaos"
+dynamic = ["version"]
+description = "Fault injection for a running SONiC switch, with an oracle that tells a fault that never landed from one the switch survived."
+readme = "README.md"
+# Provisional floor: 3.11 (Debian bookworm) and 3.12 (docker-sonic-mgmt on ubuntu:24.04) are the
+# two interpreters the suite has been run on.
+requires-python = ">=3.11"
+dependencies = ["PyYAML"]
+
+[project.optional-dependencies]
+test = ["pytest>=7", "flake8>=7"]
+
+[project.scripts]
+sonic-chaos = "sonic_chaos.cli:main"
+
+# The entry-point name is the module path on purpose: a suite that also lists the plugin in
+# pytest_plugins (sonic-mgmt does) then finds it already registered instead of loading it twice.
+[project.entry-points.pytest11]
+"sonic_chaos.pytest_plugin" = "sonic_chaos.pytest_plugin"
+
+[tool.setuptools.dynamic]
+version = {attr = "sonic_chaos.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Files that are shipped as-is: pushed to the switch (agent, shim sources) or read at run time.
+[tool.setuptools.package-data]
+sonic_chaos = [
+    "agent/*.py",
+    "profiles/*.yml",
+    "experiments/*.yml",
+    "console/*.html",
+    "shim/Makefile", "shim/*.sh", "shim/*.c", "shim/*.h", "shim/*.py", "shim/*.md", "shim/.gitignore",
+    "shim/test/*.sh", "shim/test/*.c",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["chaos(injector, spec, **params): one sonic-chaos fault for this test"]

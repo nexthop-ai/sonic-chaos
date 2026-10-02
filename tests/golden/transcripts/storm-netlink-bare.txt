@@ -1,0 +1,16 @@
+# golden transcript: storm-netlink-bare
+# spec: storm=netlink:rate=1000:seconds=20
+# box: bare
+# injector: storm(count=1000,how=lag,kind=netlink,port=,rate=1000,seconds=20)
+== apply
+shell: id -u
+shell: sudo -n sonic-db-cli CONFIG_DB KEYS 'PORTCHANNEL_MEMBER|*'
+!! apply raised RuntimeError: storm: no PortChannel members on dut1 -- how=lag needs a LAG member to flap; how=link or how=neigh work without one
+== status
+shell: sudo -n sh -c 'echo ENOBUFS=$(dmesg 2>/dev/null | grep -ci enobufs; true); echo NEIGH=$(sonic-db-cli APPL_DB KEYS '"'"'NEIGH_TABLE:*'"'"' | wc -l); echo RUNNING=$(pgrep -f '"'"'[s]onic-chaos-storm'"'"' | wc -l)'
+-> {"active": false, "enobufs_before": null, "enobufs_new": null, "enobufs_now": 0, "flaps": null, "kind": "netlink", "member": null, "neighbours_before": null, "neighbours_lost": null, "neighbours_now": 0}
+== release
+shell: sudo -n pkill -9 -f '[s]onic-chaos-storm' || true
+shell: sudo -n sh -c 'cat /tmp/sonic-chaos-storm-flaps 2>/dev/null || echo 0'
+shell: sudo -n rm -f /tmp/sonic-chaos-storm-flaps
+-> null

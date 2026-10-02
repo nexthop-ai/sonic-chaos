@@ -1,0 +1,18 @@
+# golden transcript: pause-docker-bare
+# spec: pause=swss:5:how=docker
+# box: bare
+# injector: pause(container=swss,how=docker,process=None,seconds=5)
+== apply
+shell: docker pause swss
+shell: id -u
+shell: sudo -n mkdir -p /tmp/sonic-chaos && sudo -n chmod 1777 /tmp/sonic-chaos
+shell: mkdir -p /tmp/sonic-chaos && cat > /tmp/sonic-chaos/pause-swss-container.sh <<'CHAOS_EOF'\nsleep 15\ndocker unpause swss\nrm -f /tmp/sonic-chaos/pause-swss-container.pid /tmp/sonic-chaos/pause-swss-container.sh\nCHAOS_EOF\nnohup setsid sh /tmp/sonic-chaos/pause-swss-container.sh >/tmp/sonic-chaos/pause-swss-container.log 2>&1 </dev/null &\necho $! > /tmp/sonic-chaos/pause-swss-container.pid && cat /tmp/sonic-chaos/pause-swss-container.pid
+shell: docker inspect -f '{{.State.Paused}}' swss
+-> {"action": "pause", "at": 1800000000.0, "command": "docker pause swss", "deadman_pid": null, "host": "dut1", "how": "docker", "injector": "pause(container=swss,how=docker,process=None,seconds=5)", "seconds": 5, "thaw_command": "docker unpause swss", "verified_frozen": false}
+== status
+shell: docker inspect -f '{{.State.Paused}}' swss
+-> {"achieved": {"frozen": false, "seconds": 5}, "active": false, "frozen": false}
+== release
+shell: docker unpause swss
+shell: if [ -f /tmp/sonic-chaos/pause-swss-container.pid ]; then p=$(cat /tmp/sonic-chaos/pause-swss-container.pid); kill -- -"$p" 2>/dev/null; kill "$p" 2>/dev/null; fi; rm -f /tmp/sonic-chaos/pause-swss-container.pid /tmp/sonic-chaos/pause-swss-container.sh /tmp/sonic-chaos/pause-swss-container.log; true
+-> null

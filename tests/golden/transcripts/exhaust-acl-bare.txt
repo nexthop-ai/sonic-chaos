@@ -1,0 +1,16 @@
+# golden transcript: exhaust-acl-bare
+# spec: exhaust=acl:500
+# box: bare
+# injector: exhaust(count=500,over_pct=110,settle=60,table=acl)
+== apply
+shell: id -u
+shell: sudo -n crm show resources all
+!! apply raised RuntimeError: exhaust: no acl_entry rows in `crm show resources all` on dut1 -- no ACL table is bound, so there is nothing to fill
+== status
+shell: sudo -n crm show resources all
+!! status raised RuntimeError: exhaust: no acl_entry rows in `crm show resources all` on dut1 -- no ACL table is bound, so there is nothing to fill
+== release
+shell: sudo -n rm -f /tmp/sonic-chaos-acl*.sh
+shell: sudo -n crm show summary
+shell: sudo -n crm show resources all
+!! release raised RuntimeError: exhaust: no acl_entry rows in `crm show resources all` on dut1 -- no ACL table is bound, so there is nothing to fill

@@ -1,0 +1,57 @@
+# sonic-chaos under sonic-mgmt on a KVM testbed (vms-t1). A TEMPLATE: it needs a self-hosted
+# runner labelled `sonic-kvm` with a deployed sonic-mgmt KVM testbed and a running docker-sonic-mgmt
+# container, which GitHub-hosted runners cannot provide (nested virtualisation, ~30 GB). It has not
+# been run yet; it only triggers by hand until such a runner exists.
+#
+# The tree that is patched is the tree that is tested: the patched checkout is copied into the
+# container and the tests run from that copy. Inputs reach the shell only through env, and are
+# checked against a strict pattern before use.
+name: sonic-mgmt KVM
+
+on:
+  workflow_dispatch:
+    inputs:
+      testbed:
+        description: "sonic-mgmt testbed name"
+        default: "vms-kvm-t1"
+      sonic_mgmt_ref:
+        description: "sonic-net/sonic-mgmt ref to test against"
+        default: "master"
+
+env:
+  TESTBED: ${{ inputs.testbed }}
+  CONTAINER: sonic-mgmt              # the runner's docker-sonic-mgmt container
+  TREE: /data/sonic-mgmt-chaos       # where the patched tree lives inside it
+
+jobs:
+  kvm:
+    runs-on: [self-hosted, sonic-kvm]
+    timeout-minutes: 120
+    steps:
+      - name: check the inputs
+        run: |
+          [[ "$TESTBED" =~ ^[A-Za-z0-9_.-]{1,64}$ ]] || { echo "bad testbed name: $TESTBED"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          path: sonic-chaos
+      - uses: actions/checkout@v4
+        with:
+          repository: sonic-net/sonic-mgmt
+          ref: ${{ inputs.sonic_mgmt_ref }}
+          path: sonic-mgmt
+      - name: patch, and put the patched tree and the package into the container
+        run: |
+          git -C sonic-mgmt apply "$GITHUB_WORKSPACE/sonic-chaos/integration/sonic-mgmt/sonic-mgmt.patch"
+          docker exec "$CONTAINER" rm -rf "$TREE" /data/sonic-chaos
+          docker cp sonic-mgmt "$CONTAINER:$TREE"
+          docker cp sonic-chaos "$CONTAINER:/data/sonic-chaos"
+          docker exec "$CONTAINER" pip install /data/sonic-chaos
+          docker exec "$CONTAINER" grep -q "tests.common.plugins.sonic_chaos" "$TREE/tests/conftest.py"
+      - name: a clean run, then the same test under a fault, then a dry-run schedule
+        run: |
+          t=platform_tests/test_port_toggle.py::TestPortToggle::test_port_toggle
+          docker exec -w "$TREE/tests" "$CONTAINER" ./run_tests.sh -n "$TESTBED" -c "$t"
+          docker exec -w "$TREE/tests" "$CONTAINER" ./run_tests.sh -n "$TESTBED" -c "$t" \
+            -e "--chaos kill=orchagent:how=restart --chaos-recover 300 --log-cli-level=info"
+          docker exec -w "$TREE/tests" "$CONTAINER" ./run_tests.sh -n "$TESTBED" \
+            -c platform_tests/test_port_toggle.py -e "--chaos-file orchagent-restart --chaos-dry-run"

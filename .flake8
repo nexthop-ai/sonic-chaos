@@ -1,0 +1,4 @@
+[flake8]
+# Same limit sonic-mgmt's pre-commit enforces, so code that moves upstream needs no reflow.
+max-line-length = 120
+exclude = .git,__pycache__,build,dist,*.egg-info

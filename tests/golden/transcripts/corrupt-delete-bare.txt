@@ -1,0 +1,12 @@
+# golden transcript: corrupt-delete-bare
+# spec: corrupt=APPL_DB:[PORT_TABLE:Ethernet0]:delete=true
+# box: bare
+# injector: corrupt(db=APPL_DB,delete=true,key=PORT_TABLE:Ethernet0)
+== apply
+shell: sonic-db-cli APPL_DB HGETALL PORT_TABLE:Ethernet0
+!! apply raised RuntimeError: corrupt: APPL_DB 'PORT_TABLE:Ethernet0' does not exist on dut1, so there is nothing to delete. A fault that silently did nothing would be reported as 'no divergence found'.
+== status
+shell: sonic-db-cli APPL_DB HGETALL PORT_TABLE:Ethernet0
+-> {"achieved": null, "active": true, "delete": true, "fields": [], "present": false}
+== release
+-> null

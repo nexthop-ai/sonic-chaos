@@ -1,0 +1,17 @@
+# golden transcript: cpu-docker-bare
+# spec: cpu=swss:50
+# box: bare
+# injector: cpu(container=swss,how=auto,interval=5,mode=budget,process=swss,settle=20,share=50,ttl=900)
+== apply
+shell: id -u
+shell: sudo -n mkdir -p /tmp/sonic-chaos && sudo -n chmod 1777 /tmp/sonic-chaos
+shell: md5sum /tmp/sonic-chaos/chaos_agent.py 2>/dev/null | cut -d' ' -f1
+copy: src <pkg>/agent/chaos_agent.py -> /tmp/sonic-chaos/chaos_agent.py mode=0755
+shell: sudo -n python3 /tmp/sonic-chaos/chaos_agent.py apply --container swss --how docker --interval 5 --kind cpu --share 50 --target swss --ttl 900
+!! apply raised SqueezeError: [squeeze] agent apply produced no JSON on dut1: rc=0 stderr=''
+== status
+shell: sudo -n python3 /tmp/sonic-chaos/chaos_agent.py status --kind cpu --target swss
+-> {"achieved": null, "active": false, "error": "[squeeze] agent status produced no JSON on dut1: rc=0 stderr=''", "requested": 50}
+== release
+shell: sudo -n python3 /tmp/sonic-chaos/chaos_agent.py release --kind cpu --target swss
+!! release raised SqueezeError: [cpu] swss may still be throttled on dut1: [squeeze] agent release produced no JSON on dut1: rc=0 stderr=''

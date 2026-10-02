@@ -1,0 +1,30 @@
+# golden transcript: syslog-bare
+# spec: syslog=1000:seconds=10
+# box: bare
+# injector: syslog(container=swss,facility=user,ident=sonic-chaos,max_disk_pct=85,rate=1000,seconds=10,severity=notice,size=200)
+== apply
+shell: df --output=pcent /var/log | tail -1
+shell: sudo grep -c sonic-chaos /var/log/syslog
+shell: docker exec -d swss sh -c '# chaosflood-sonic-chaos\nn=0; end=$(( $(date +%s) + 10 )); while [ $(date +%s) -lt $end ]; do   n=$((n+1));   for i in $(seq 1 100); do echo "$n-$i <b64 len=157 sha256=f3de55d9ccbe>"; done     | logger -t sonic-chaos -p user.notice;   sleep 0.1; done'
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: docker exec swss sh -c '# chaosflood-sonic-chaos\nn=0; end=$(( $(date +%s) + 10 )); while [ $(date +%s) -lt $end ]; do   n=$((n+1));   for i in $(seq 1 100); do echo "$n-$i <b64 len=157 sha256=f3de55d9ccbe>"; done     | logger -t sonic-chaos -p user.notice;   sleep 0.1; done' 2>&1 | head -3
+!! apply raised RuntimeError: syslog: the generator was not running 10.0s after launch on dut1. Running it in the foreground said: 'nothing'
+== status
+shell: sudo grep -c sonic-chaos /var/log/syslog
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: df --output=pcent /var/log | tail -1
+-> {"achieved": {"attempted": 10000, "delivered": null, "disk_pct": null, "drop_pct": null}, "active": false, "attempted": 10000, "delivered": null}
+== release
+shell: docker exec swss pkill -f chaosflood-sonic-chaos 2>/dev/null; true
+shell: if [ -f /tmp/sonic-chaos/syslog-swss-sonic-chaos.pid ]; then p=$(cat /tmp/sonic-chaos/syslog-swss-sonic-chaos.pid); kill -- -"$p" 2>/dev/null; kill "$p" 2>/dev/null; fi; rm -f /tmp/sonic-chaos/syslog-swss-sonic-chaos.pid /tmp/sonic-chaos/syslog-swss-sonic-chaos.sh /tmp/sonic-chaos/syslog-swss-sonic-chaos.log; true
+-> null

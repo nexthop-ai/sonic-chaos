@@ -1,0 +1,16 @@
+# golden transcript: exhaust-nhg-bare
+# spec: exhaust=nhg:0:over_pct=110
+# box: bare
+# injector: exhaust(count=0,over_pct=110,settle=60,table=nhg)
+== apply
+shell: id -u
+shell: sudo -n crm show resources all
+!! apply raised RuntimeError: exhaust: nexthop_group not found in `crm show resources all` on dut1
+== status
+shell: sudo -n crm show resources all
+!! status raised RuntimeError: exhaust: nexthop_group not found in `crm show resources all` on dut1
+== release
+shell: sudo -n rm -f /tmp/sonic-chaos-neigh*.sh
+shell: sudo -n crm show summary
+shell: sudo -n crm show resources all
+!! release raised RuntimeError: exhaust: nexthop_group not found in `crm show resources all` on dut1

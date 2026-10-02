@@ -1,0 +1,12 @@
+# golden transcript: redis-sleep-healthy
+# spec: redis=sleep:2000
+# box: healthy
+# injector: redis(action=sleep,db=APPL_DB,target=2000)
+== apply
+shell: sonic-db-cli APPL_DB DEBUG SLEEP 2.0
+-> {"action": "redis_sleep", "at": 1800000000.0, "command": "sonic-db-cli APPL_DB DEBUG SLEEP 2.0", "host": "dut1", "injector": "redis(action=sleep,db=APPL_DB,target=2000)", "ms": 2000}
+== status
+shell: sonic-db-cli APPL_DB PING
+-> {"achieved": {"slept_ms": 2000}, "active": false, "responsive": true}
+== release
+-> null

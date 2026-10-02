@@ -1,0 +1,31 @@
+# Process name -> container, plus who waits on it and for how long: the timeout the fault is aimed at.
+# Adding a daemon is a one-line change here; the CLI never needs a container name.
+# Resolved on the DUT at apply time (`docker top`) and again on every PID change.
+
+processes:
+  orchagent:      {container: swss,     waited_on_by: "wpa_cli 10s; every *mgrd via APPL_DB; route/neigh programming"}
+  portsyncd:      {container: swss,     waited_on_by: "orchagent for port init"}
+  vlanmgrd:       {container: swss,     waited_on_by: "orchagent via APPL_DB"}
+  teammgrd:       {container: teamd,    waited_on_by: "teamd instances it spawns"}
+  teamd:          {container: teamd,    waited_on_by: "LACP partner, short timeout 3s x3"}
+  syncd:          {container: syncd,    waited_on_by: "orchagent via sairedis, 60s response timeout"}
+  bgpd:           {container: bgp,      waited_on_by: "BGP peers (hold timer); zebra"}
+  zebra:          {container: bgp,      waited_on_by: "bgpd via ZAPI; fpmsyncd via FPM socket"}
+  fpmsyncd:       {container: bgp,      waited_on_by: "orchagent for ROUTE_TABLE in APPL_DB"}
+  bfdd:           {container: bgp,      waited_on_by: "micro-BFD peers at sub-second timers"}
+  lldpd:          {container: lldp,     waited_on_by: "neighbours, 120s TTL"}
+  macsecmgrd:     {container: macsec,   waited_on_by: "wpa_supplicant; MKA peer key-rotation timers"}
+  wpa_supplicant: {container: macsec,   waited_on_by: "MKA peer"}
+  redis-server:   {container: database, waited_on_by: "everything; supervisor health checks"}
+
+# Whole-container targets. `--chaos cpu=swss:50` throttles the whole container (Squeeze Tier 0).
+# The container set of a community SONiC image (202511). A platform that runs more lists them in
+# its own profile, laid over this one: --profile <file|name>, or SONIC_CHAOS_PROFILE.
+containers: [swss, syncd, gbsyncd, bgp, teamd, lldp, macsec, pmon, snmp, database,
+             eventd, gnmi, mgmt-framework, radv, restapi]
+
+# Refused by every injector. Starving redis trips supervisor health checks and restarts containers --
+# that is a bricked testbed for the session, not a finding.
+protected:
+  - redis-server
+  - database

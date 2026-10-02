@@ -1,0 +1,22 @@
+# golden transcript: syslog-healthy
+# spec: syslog=5000:seconds=30
+# box: healthy
+# injector: syslog(container=swss,facility=user,ident=sonic-chaos,max_disk_pct=85,rate=5000,seconds=30,severity=notice,size=200)
+== apply
+shell: df --output=pcent /var/log | tail -1
+shell: sudo grep -c sonic-chaos /var/log/syslog
+shell: docker exec -d swss sh -c '# chaosflood-sonic-chaos\nn=0; end=$(( $(date +%s) + 30 )); while [ $(date +%s) -lt $end ]; do   n=$((n+1));   for i in $(seq 1 500); do echo "$n-$i <b64 len=157 sha256=f3de55d9ccbe>"; done     | logger -t sonic-chaos -p user.notice;   sleep 0.1; done'
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: id -u
+shell: sudo -n mkdir -p /tmp/sonic-chaos && sudo -n chmod 1777 /tmp/sonic-chaos
+shell: mkdir -p /tmp/sonic-chaos && cat > /tmp/sonic-chaos/syslog-swss-sonic-chaos.sh <<'CHAOS_EOF'\nsleep 60\ndocker exec swss pkill -f chaosflood-sonic-chaos 2>/dev/null\nrm -f /tmp/sonic-chaos/syslog-swss-sonic-chaos.pid /tmp/sonic-chaos/syslog-swss-sonic-chaos.sh\nCHAOS_EOF\nnohup setsid sh /tmp/sonic-chaos/syslog-swss-sonic-chaos.sh >/tmp/sonic-chaos/syslog-swss-sonic-chaos.log 2>&1 </dev/null &\necho $! > /tmp/sonic-chaos/syslog-swss-sonic-chaos.pid && cat /tmp/sonic-chaos/syslog-swss-sonic-chaos.pid
+-> {"action": "syslog_flood", "at": 1800000000.0, "command": "docker exec -d swss sh -c '# chaosflood-sonic-chaos\nn=0; end=$(( $(date +%s) + 30 )); while [ $(date +%s) -lt $end ]; do   n=$((n+1));   for i in $(seq 1 500); do echo \"$n-$i xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"; done     | logger -t sonic-chaos -p user.notice;   sleep 0.1; done'", "container": "swss", "delivered_before": 0, "disk_pct_before": 12, "estimated_bytes": 30000000, "host": "dut1", "ident": "sonic-chaos", "injector": "syslog(container=swss,facility=user,ident=sonic-chaos,max_disk_pct=85,rate=5000,seconds=30,severity=notice,size=200)", "priority": "user.notice", "process": null, "rate": 5000, "seconds": 30, "verified_running": true}
+== status
+shell: sudo grep -c sonic-chaos /var/log/syslog
+shell: docker exec swss pgrep -f chaosflood-sonic-chaos >/dev/null 2>&1 && echo yes || echo no
+shell: df --output=pcent /var/log | tail -1
+-> {"achieved": {"attempted": 150000, "delivered": 0, "disk_pct": 12, "drop_pct": 100.0}, "active": true, "attempted": 150000, "delivered": 0}
+== release
+shell: docker exec swss pkill -f chaosflood-sonic-chaos 2>/dev/null; true
+shell: if [ -f /tmp/sonic-chaos/syslog-swss-sonic-chaos.pid ]; then p=$(cat /tmp/sonic-chaos/syslog-swss-sonic-chaos.pid); kill -- -"$p" 2>/dev/null; kill "$p" 2>/dev/null; fi; rm -f /tmp/sonic-chaos/syslog-swss-sonic-chaos.pid /tmp/sonic-chaos/syslog-swss-sonic-chaos.sh /tmp/sonic-chaos/syslog-swss-sonic-chaos.log; true
+-> null

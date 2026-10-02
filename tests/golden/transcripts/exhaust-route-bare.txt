@@ -1,0 +1,16 @@
+# golden transcript: exhaust-route-bare
+# spec: exhaust=route:20000
+# box: bare
+# injector: exhaust(count=20000,over_pct=110,settle=60,table=route)
+== apply
+shell: id -u
+shell: sudo -n crm show resources all
+!! apply raised RuntimeError: exhaust: ipv4_route not found in `crm show resources all` on dut1
+== status
+shell: sudo -n crm show resources all
+!! status raised RuntimeError: exhaust: ipv4_route not found in `crm show resources all` on dut1
+== release
+shell: sudo -n docker exec bgp sh -c 'rm -f /tmp/sonic-chaos-*exhaust-*.conf'
+shell: sudo -n crm show summary
+shell: sudo -n crm show resources all
+!! release raised RuntimeError: exhaust: ipv4_route not found in `crm show resources all` on dut1

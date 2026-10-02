@@ -1,0 +1,14 @@
+# golden transcript: redis-client-kill-bare
+# spec: redis=client_kill:orchagent
+# box: bare
+# injector: redis(action=client_kill,container=swss,db=APPL_DB,target=orchagent)
+== apply
+shell: docker top swss 2>/dev/null | awk 'NR>1 { cmd=""; for (i=8; i<=NF; i++) cmd=cmd $i " "; if (cmd ~ /orchagent/) { print $2; exit } }'
+shell: docker top database 2>/dev/null | awk 'NR>1 { cmd=""; for (i=8; i<=NF; i++) cmd=cmd $i " "; if (cmd ~ /redis-server/) { print $2; exit } }'
+!! apply raised RuntimeError: redis: orchagent is not running on dut1, so there are no connections to kill
+== status
+shell: docker top swss 2>/dev/null | awk 'NR>1 { cmd=""; for (i=8; i<=NF; i++) cmd=cmd $i " "; if (cmd ~ /orchagent/) { print $2; exit } }'
+shell: docker top database 2>/dev/null | awk 'NR>1 { cmd=""; for (i=8; i<=NF; i++) cmd=cmd $i " "; if (cmd ~ /redis-server/) { print $2; exit } }'
+-> {"achieved": {"connections_now": null, "killed": null, "reconnected": false}, "active": false, "killed": null}
+== release
+-> null

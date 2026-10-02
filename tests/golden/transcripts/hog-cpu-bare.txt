@@ -1,0 +1,16 @@
+# golden transcript: hog-cpu-bare
+# spec: hog=swss:cpu=40
+# box: bare
+# injector: hog(container=swss,cores=1,cpu=40,mem=0,process=swss,settle=20,ttl=900)
+== apply
+shell: id -u
+shell: sudo -n docker inspect --format '{{.Id}}' swss
+!! apply raised RuntimeError: hog: cannot resolve container swss: 
+== status
+shell: sudo -n docker inspect --format '{{.Id}}' swss
+!! status raised RuntimeError: hog: cannot resolve container swss: 
+== release
+shell: sudo -n pkill -9 -f '[s]onic-chaos-hog' || true
+shell: sudo -n pkill -f '[h]og-swss' || true
+shell: sudo -n docker inspect --format '{{.Id}}' swss
+-> null

@@ -1,0 +1,15 @@
+# golden transcript: corrupt-healthy
+# spec: corrupt=APPL_DB:[PORT_TABLE:Ethernet0]:admin_status=garbage
+# box: healthy
+# injector: corrupt(admin_status=garbage,db=APPL_DB,key=PORT_TABLE:Ethernet0)
+== apply
+shell: sonic-db-cli APPL_DB HGETALL PORT_TABLE:Ethernet0
+shell: sonic-db-cli APPL_DB HSET PORT_TABLE:Ethernet0 admin_status garbage
+shell: sonic-db-cli APPL_DB HGETALL PORT_TABLE:Ethernet0
+-> {"action": "corrupt", "at": 1800000000.0, "command": "sonic-db-cli APPL_DB HSET PORT_TABLE:Ethernet0 admin_status garbage", "db": "APPL_DB", "deleted": false, "existed_before": true, "fields": {"admin_status": "garbage"}, "host": "dut1", "injector": "corrupt(admin_status=garbage,db=APPL_DB,key=PORT_TABLE:Ethernet0)", "key": "PORT_TABLE:Ethernet0", "original": {"admin_status": "up", "alias": "fortyGigE0/0", "index": "0", "lanes": "25,26,27,28", "mtu": "9100", "speed": "40000"}}
+== status
+shell: sonic-db-cli APPL_DB HGETALL PORT_TABLE:Ethernet0
+-> {"achieved": {"admin_status": "up"}, "active": false, "delete": false, "fields": ["admin_status"], "present": true}
+== release
+shell: sonic-db-cli APPL_DB HSET PORT_TABLE:Ethernet0 admin_status up alias fortyGigE0/0 index 0 lanes 25,26,27,28 mtu 9100 speed 40000
+-> null

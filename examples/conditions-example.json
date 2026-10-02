@@ -1,0 +1,26 @@
+{
+  "conditions": [
+    {"name": "baseline", "faults": [],
+     "note": "control: the same tests with nothing applied, so a flip is attributable"},
+
+    {"name": "restart", "faults": ["kill=orchagent:how=restart:settle=60"],
+     "note": "BUG-13297 / 13773 shape; on HWSKU-A this restarts the whole swss chain"},
+
+    {"name": "starved", "faults": ["cpu=orchagent:30"],
+     "note": "a ceiling only bites while orchagent is busy; read bit= in the measured property"},
+
+    {"name": "frozen", "faults": ["pause=orchagent:10"],
+     "note": "the cheapest way to blow a fixed timeout: LACP 3x3 s, wpa_cli 10 s, sairedis 60 s"},
+
+    {"name": "slow-sai", "faults": ["sai=route_entry:create:delay=2000"],
+     "note": "every route create waits 2 s inside SAI; first use restarts syncd once"},
+
+    {"name": "starved+flooded", "faults": ["cpu=orchagent:30", "syslog=1000:seconds=30:process=orchagent"],
+     "note": "two at once: does the evidence for the first survive the second?"},
+
+    {"name": "item-not-found",
+     "faults": [{"sai": {"object_type": "vlan_member", "op": "remove",
+                         "status": "SAI_STATUS_ITEM_NOT_FOUND", "count": 1}}],
+     "note": "BUG-13313, written in the experiment-file shape instead of a spec string"}
+  ]
+}

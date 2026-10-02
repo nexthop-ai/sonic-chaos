@@ -1,0 +1,16 @@
+# golden transcript: exhaust-neighbor-bare
+# spec: exhaust=neighbor:500
+# box: bare
+# injector: exhaust(count=500,over_pct=110,settle=60,table=neighbor)
+== apply
+shell: id -u
+shell: sudo -n crm show resources all
+!! apply raised RuntimeError: exhaust: ipv4_neighbor not found in `crm show resources all` on dut1
+== status
+shell: sudo -n crm show resources all
+!! status raised RuntimeError: exhaust: ipv4_neighbor not found in `crm show resources all` on dut1
+== release
+shell: sudo -n rm -f /tmp/sonic-chaos-neigh*.sh
+shell: sudo -n crm show summary
+shell: sudo -n crm show resources all
+!! release raised RuntimeError: exhaust: ipv4_neighbor not found in `crm show resources all` on dut1

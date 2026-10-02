@@ -1,0 +1,61 @@
+name: sonic-chaos
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install flake8
+      - name: flake8, 120 columns like sonic-mgmt
+        run: flake8 --max-line-length=120 .
+
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install pytest PyYAML jsonschema
+      - name: unit, contract, golden-transcript and hygiene suites
+        run: python -m pytest -q
+      - name: the package installs, and imports without pytest or sonic-mgmt
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install .
+          cd /tmp && /tmp/clean/bin/python -c "import sys, sonic_chaos; assert 'pytest' not in sys.modules; print(sonic_chaos.__version__)"
+          /tmp/clean/bin/sonic-chaos selftest
+          /tmp/clean/bin/sonic-chaos run --dut cmd:false --chaos kill=orchagent --chaos-dry-run
+
+  # The README's install, then the whole suite: the plugin's pytest11 entry point is live in the
+  # outer session here, which the source-tree run above cannot show.
+  test-installed:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e . pytest PyYAML jsonschema
+      - name: the suite with sonic-chaos installed
+        run: python -m pytest -q
+
+  shim:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: build the interposers, check the ABI and glibc floor, run the shim tests
+        run: src/sonic_chaos/shim/build.sh
+      - name: spin interposer tests
+        run: src/sonic_chaos/shim/test/run_spin_tests.sh

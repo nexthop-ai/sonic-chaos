@@ -1,0 +1,18 @@
+# golden transcript: pause-healthy
+# spec: pause=orchagent:10
+# box: healthy
+# injector: pause(container=swss,how=signal,process=orchagent,seconds=10)
+== apply
+shell: docker exec swss pkill -STOP -x orchagent
+shell: id -u
+shell: sudo -n mkdir -p /tmp/sonic-chaos && sudo -n chmod 1777 /tmp/sonic-chaos
+shell: mkdir -p /tmp/sonic-chaos && cat > /tmp/sonic-chaos/pause-swss-orchagent.sh <<'CHAOS_EOF'\nsleep 20\ndocker exec swss pkill -CONT -x orchagent\nrm -f /tmp/sonic-chaos/pause-swss-orchagent.pid /tmp/sonic-chaos/pause-swss-orchagent.sh\nCHAOS_EOF\nnohup setsid sh /tmp/sonic-chaos/pause-swss-orchagent.sh >/tmp/sonic-chaos/pause-swss-orchagent.log 2>&1 </dev/null &\necho $! > /tmp/sonic-chaos/pause-swss-orchagent.pid && cat /tmp/sonic-chaos/pause-swss-orchagent.pid
+shell: docker exec swss ps -o stat=,comm= -C orchagent 2>/dev/null
+-> {"action": "pause", "at": 1800000000.0, "command": "docker exec swss pkill -STOP -x orchagent", "deadman_pid": 4242, "host": "dut1", "how": "signal", "injector": "pause(container=swss,how=signal,process=orchagent,seconds=10)", "seconds": 10, "thaw_command": "docker exec swss pkill -CONT -x orchagent", "verified_frozen": true}
+== status
+shell: docker exec swss ps -o stat=,comm= -C orchagent 2>/dev/null
+-> {"achieved": {"frozen": true, "seconds": 10}, "active": true, "frozen": true}
+== release
+shell: docker exec swss pkill -CONT -x orchagent
+shell: if [ -f /tmp/sonic-chaos/pause-swss-orchagent.pid ]; then p=$(cat /tmp/sonic-chaos/pause-swss-orchagent.pid); kill -- -"$p" 2>/dev/null; kill "$p" 2>/dev/null; fi; rm -f /tmp/sonic-chaos/pause-swss-orchagent.pid /tmp/sonic-chaos/pause-swss-orchagent.sh /tmp/sonic-chaos/pause-swss-orchagent.log; true
+-> null

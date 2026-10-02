@@ -1,0 +1,17 @@
+# golden transcript: cpu-cgroup-bare
+# spec: cpu=orchagent:30
+# box: bare
+# injector: cpu(container=swss,how=auto,interval=5,mode=budget,process=orchagent,settle=20,share=30,ttl=900)
+== apply
+shell: id -u
+shell: sudo -n mkdir -p /tmp/sonic-chaos && sudo -n chmod 1777 /tmp/sonic-chaos
+shell: md5sum /tmp/sonic-chaos/chaos_agent.py 2>/dev/null | cut -d' ' -f1
+copy: src <pkg>/agent/chaos_agent.py -> /tmp/sonic-chaos/chaos_agent.py mode=0755
+shell: sudo -n python3 /tmp/sonic-chaos/chaos_agent.py apply --container swss --how cgroup --interval 5 --kind cpu --share 30 --target orchagent --ttl 900
+!! apply raised SqueezeError: [squeeze] agent apply produced no JSON on dut1: rc=0 stderr=''
+== status
+shell: sudo -n python3 /tmp/sonic-chaos/chaos_agent.py status --kind cpu --target orchagent
+-> {"achieved": null, "active": false, "error": "[squeeze] agent status produced no JSON on dut1: rc=0 stderr=''", "requested": 30}
+== release
+shell: sudo -n python3 /tmp/sonic-chaos/chaos_agent.py release --kind cpu --target orchagent
+!! release raised SqueezeError: [cpu] orchagent may still be throttled on dut1: [squeeze] agent release produced no JSON on dut1: rc=0 stderr=''

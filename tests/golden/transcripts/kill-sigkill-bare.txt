@@ -1,0 +1,41 @@
+# golden transcript: kill-sigkill-bare
+# spec: kill=orchagent
+# box: bare
+# injector: kill(container=swss,how=sigkill,process=orchagent,settle=20,signal=9)
+== apply
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: id -u
+shell: sudo -n docker inspect --format '{{.State.StartedAt}}' swss
+shell: sudo -n docker exec swss cat /etc/supervisor/critical_processes 2>/dev/null
+shell: docker exec swss pkill -9 -x orchagent
+shell: sudo -n docker exec swss cat /etc/supervisor/critical_processes 2>/dev/null
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: sudo -n systemctl show swss -p Result --value
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: sudo -n systemctl show swss -p Result --value
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: sudo -n systemctl show swss -p Result --value
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: sudo -n systemctl show swss -p Result --value
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: sudo -n systemctl show swss -p Result --value
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: sudo -n systemctl show swss -p Result --value
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: sudo -n systemctl show swss -p Result --value
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: sudo -n systemctl show swss -p Result --value
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: sudo -n systemctl show swss -p Result --value
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: sudo -n systemctl show swss -p Result --value
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: sudo -n systemctl show swss -p Result --value
+shell: docker inspect -f '{{.State.Running}}' swss
+shell: sudo -n docker inspect --format '{{.State.StartedAt}}' swss
+-> {"action": "kill", "at": 1800000020.0, "command": "docker exec swss pkill -9 -x orchagent", "container": "swss", "host": "dut1", "how": "sigkill", "injector": "kill(container=swss,how=sigkill,process=orchagent,settle=20,signal=9)", "pid_after": null, "pid_before": null, "process": "orchagent", "recovered": false, "recovered_after_s": 20.0, "settle_budget_s": 20, "start_limit_hit": false, "started_after": "", "started_before": ""}
+== status
+shell: docker inspect -f '{{.State.Running}}' swss
+-> {"achieved": {"after_s": 20.0, "recovered": false, "recovered_now": false, "start_limit_hit": false, "within_settle": false}, "active": false, "pid": null, "state": "CONTAINER_DOWN"}
+== release
+-> null

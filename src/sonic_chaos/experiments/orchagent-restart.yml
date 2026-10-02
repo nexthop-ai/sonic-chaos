@@ -1,0 +1,53 @@
+# The cold-restart route-loss / temp-view-rebuild family: a cold orchagent restart rebuilds the temp view without
+# replaying APPL_DB, so APPLY_VIEW removes state the ASIC should have kept. Pure orchagent
+# logic -- no vendor SAI in the path -- so this runs on VS and on hardware.
+#
+#   pytest tests/pc/test_po_update.py --chaos-file .../experiments/orchagent-restart.yml
+#   pytest ... --chaos-file .../orchagent-restart.yml --chaos-seed 20260911   # replay a failure
+#
+# Start here. It is the cheapest experiment that reproduces a filed P2.
+
+experiment: orchagent-restart-consistency
+seed: 20260911            # same seed -> same fault order; this is what makes a failure a repro
+duration: 10m
+min_gap: 90s              # orchagent needs time to settle before we judge it
+
+# Must ALL pass before the first fault. If they do not, the run is INVALID, not failed --
+# we blame the box we were given, never a fault we injected.
+steady_state: parity
+
+faults:
+  # The headline. Restarting a single daemon is explicitly "not a recommended operation",
+  # so it is tagged unsupported-op: a finding here is real but must be read in that light.
+  - kill:
+      process: orchagent
+      how: restart
+      settle: 60
+      weight: 3
+      tag: unsupported-op
+
+  # Container restart is a supported operation, so anything found here is unambiguous.
+  - kill:
+      process: swss
+      how: container
+      settle: 120
+      weight: 1
+      tag: supported-op
+
+  # A freeze long enough to build a redis backlog, then thaw and see whether it drains.
+  - pause:
+      process: orchagent
+      seconds: 30
+      weight: 2
+      tag: unsupported-op
+
+  # Does a reconnecting ConsumerStateTable resync, or silently lose what it missed?
+  - redis:
+      action: client_kill
+      target: orchagent
+      weight: 2
+      tag: unsupported-op
+
+contract:
+  recover_within: 180s    # per-platform: some platforms respawn orchagent in place, others drop all of swss
+  invariants: parity      # or health / signal / all, or an explicit list

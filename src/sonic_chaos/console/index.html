@@ -1,0 +1,2192 @@
+<title>sonic-chaos Range Console</title>
+<meta name="description" content="Pick a DUT, tune a condition, launch a seeded chaos run against SONiC and watch the run.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* dark-first: the bare :root palette is the dark one, light is the opt-in */
+:root{
+  color-scheme:dark;
+  --bg:#0B0F14; --surface:#161C25; --surface-2:#1E2631; --inset:#232C38;
+  --screen:#04070B; --screen-ink:#E3E9F0; --screen-dim:#8D99AA;
+  --line:rgba(255,255,255,.22); --line-2:rgba(255,255,255,.34); --line-3:rgba(255,255,255,.5);
+  --ink:#EDF1F6; --ink-2:#AFBACA; --ink-3:#8D99AA;
+  --accent:#FF7A24; --accent-2:#FFB55C; --accent-soft:rgba(255,122,36,.18); --accent-ink:#1B0C03;
+  --good:#2FBF71; --warn:#FFC845; --crit:#FF5A5F;
+  --good-soft:rgba(47,191,113,.18); --warn-soft:rgba(255,200,69,.16); --crit-soft:rgba(255,90,95,.20);
+  /* glassmorphism: the moving thumb and the button surfaces are frosted, so they need
+     their own fill/edge/highlight rather than the flat surface colours */
+  --glass:rgba(255,255,255,.15); --glass-2:rgba(255,255,255,.05);
+  --glass-line:rgba(255,255,255,.30); --glass-hi:rgba(255,255,255,.40);
+  --glass-sh:rgba(0,0,0,.42); --glass-tint:rgba(255,255,255,.07);
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --disp:"Barlow Condensed","Arial Narrow",sans-serif;
+  /* six sizes, all rem, so the one html font-size below scales the whole page */
+  --t-xs:.8rem; --t-sm:.9rem; --t-md:1rem; --t-lg:1.25rem; --t-xl:1.85rem; --t-2xl:2.6rem;
+  --wrap:1480px;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    color-scheme:light;
+    --bg:#EEF1F5; --surface:#FFFFFF; --surface-2:#E7EBF1; --inset:#DCE2EA;
+    --screen:#0D1218; --screen-ink:#E3E9F0; --screen-dim:#93A0B1;
+    --line:#9AA6B6; --line-2:#7C8A9C; --line-3:#5B6878;
+    --ink:#0D1218; --ink-2:#3E4A59; --ink-3:#5B6878;
+    --accent:#C2410C; --accent-2:#9A3412; --accent-soft:rgba(194,65,12,.12); --accent-ink:#FFFFFF;
+    --good:#12713F; --warn:#8A5A00; --crit:#B31D1D;
+    --good-soft:rgba(18,113,63,.13); --warn-soft:rgba(138,90,0,.14); --crit-soft:rgba(179,29,29,.12);
+    --glass:rgba(255,255,255,.95); --glass-2:rgba(255,255,255,.70);
+    --glass-line:rgba(13,18,24,.15); --glass-hi:rgba(255,255,255,.98);
+    --glass-sh:rgba(13,18,24,.18); --glass-tint:rgba(255,255,255,.55);
+  }
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#EEF1F5; --surface:#FFFFFF; --surface-2:#E7EBF1; --inset:#DCE2EA;
+  --screen:#0D1218; --screen-ink:#E3E9F0; --screen-dim:#93A0B1;
+  --line:#9AA6B6; --line-2:#7C8A9C; --line-3:#5B6878;
+  --ink:#0D1218; --ink-2:#3E4A59; --ink-3:#5B6878;
+  --accent:#C2410C; --accent-2:#9A3412; --accent-soft:rgba(194,65,12,.12); --accent-ink:#FFFFFF;
+  --good:#12713F; --warn:#8A5A00; --crit:#B31D1D;
+  --good-soft:rgba(18,113,63,.13); --warn-soft:rgba(138,90,0,.14); --crit-soft:rgba(179,29,29,.12);
+  --glass:rgba(255,255,255,.95); --glass-2:rgba(255,255,255,.70);
+  --glass-line:rgba(13,18,24,.15); --glass-hi:rgba(255,255,255,.98);
+  --glass-sh:rgba(13,18,24,.18); --glass-tint:rgba(255,255,255,.55);
+}
+*{box-sizing:border-box}
+html{font-size:15px}   /* Projector in the header scales the whole page for a room */
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+body{margin:0;color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased;
+  background:
+    radial-gradient(62% 48% at 12% -4%, color-mix(in oklab,var(--accent) 13%,transparent), transparent 68%),
+    radial-gradient(52% 42% at 88% 4%, color-mix(in oklab,#5B8CFF 11%,transparent), transparent 70%),
+    var(--bg);
+  background-attachment:fixed}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+h1,h2,h3{margin:0;font-weight:500}
+/* ── line breaking ──────────────────────────────────────────────────────────────
+   Almost every piece of prose here is a sentence or two. The browser's greedy wrap
+   fills the first line and drops whatever is left onto the second, so a 150-character
+   lede would break at an arbitrary word and strand a short remainder under a full
+   line. `balance` evens the short blocks out; `pretty` keeps the longer explanations
+   off an orphaned last line. Both inherit, so setting them on the block also governs
+   the spans inside it. The log is deliberately left out: it is monospace, and where
+   its lines break is the runner's business, not the page's. */
+h1,h2,h3,.hd p,.k,.hint,.poolempty,.tile .sub,.startsub,.startrow{text-wrap:balance}
+.note,.verdict,.runbanner,.warnbox{text-wrap:pretty}
+code,pre,.mono{font-family:var(--mono)}
+[hidden]{display:none!important}
+.wrap{max-width:var(--wrap);margin:0 auto;padding-inline:24px;padding-block:0 48px}
+
+/* header */
+.top{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding-block:18px 12px}
+.brand h1{font-family:var(--disp);font-weight:500;font-size:var(--t-xl);line-height:1}
+.brand h1 b{font-weight:700}
+.top .spacer{flex:1}
+.screens{display:inline-flex;padding:3px}
+.screens button{border:0;background:transparent;padding:6px 16px;color:var(--ink-2);font-size:var(--t-sm);border-radius:999px}
+.tools{display:flex;align-items:center;gap:14px;font-size:var(--t-sm);color:var(--ink-2);flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.pill .dot{width:9px;height:9px;border-radius:50%;background:var(--ink-3)}
+.pill.ok .dot{background:var(--good)} .pill.sim .dot{background:var(--warn)} .pill.fail .dot{background:var(--crit)}
+.pill.run .dot{background:var(--accent);animation:blink 1.4s ease-in-out infinite} .pill.amber .dot{background:var(--warn)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.tgl{display:inline-flex;padding:2px}
+.tgl button{border:0;background:transparent;padding:4px 10px;border-radius:999px;color:var(--ink-3);font-size:var(--t-xs)}
+
+/* screens */
+.screen{display:none}
+.screen.active{display:block}
+.hd{margin:6px 0 18px}
+.hd h2{font-family:var(--disp);font-size:var(--t-2xl);line-height:1.02}
+.hd p{margin:8px 0 0;color:var(--ink-2);font-size:var(--t-md)}
+.setup{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.72fr);gap:22px;align-items:start}
+@media (max-width:900px){.setup{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.card+.card{margin-top:16px}
+.card>h3,.cardhd h3{font-size:var(--t-lg);font-weight:600}
+.card>h3{margin-bottom:14px}
+.k{font-size:var(--t-sm);color:var(--ink-2);margin:0 0 10px}
+.hint{font-size:var(--t-xs);color:var(--ink-3)}
+.note{font-size:var(--t-xs);color:var(--ink-3);margin:8px 0 0}
+.rowline{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+
+/* controls */
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field label{font-size:var(--t-sm);color:var(--ink-2)}
+input[type=text],input[type=number],select,textarea{width:100%;background:var(--surface-2);border:1px solid var(--line-2);border-radius:9px;padding:9px 11px;color:var(--ink);min-width:0;font-size:var(--t-sm)}
+select{font-size:var(--t-sm)}
+input:hover,select:hover,textarea:hover{border-color:var(--line-3)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+textarea{resize:vertical;font-family:var(--mono);font-size:var(--t-xs);line-height:1.5}
+input.req{border-color:var(--crit);box-shadow:0 0 0 3px var(--crit-soft)}
+.field label .must{color:var(--crit);font-size:var(--t-xs);margin-left:6px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:520px){.two{grid-template-columns:1fr}}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:9px 16px;border-radius:10px;
+  border:1px solid var(--glass-line);color:var(--ink);font-weight:500;font-size:var(--t-sm);white-space:nowrap;
+  background:linear-gradient(158deg,var(--glass-tint),transparent),color-mix(in oklab,var(--surface) 55%,transparent);
+  -webkit-backdrop-filter:blur(12px) saturate(1.4);backdrop-filter:blur(12px) saturate(1.4);
+  box-shadow:inset 0 1px 0 var(--glass-hi),0 1px 6px var(--glass-sh);transition:border-color .16s,background .16s}
+.btn:hover{border-color:var(--line-3);background:linear-gradient(158deg,var(--glass),var(--glass-2))}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:6px 11px;font-size:var(--t-xs)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--ink-2)}
+.btn.ghost:hover{background:var(--inset)}
+.btn.danger{color:var(--crit);border-color:var(--crit)}
+.seg{display:inline-flex;padding:2px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;padding:6px 13px;color:var(--ink-2);font-size:var(--t-sm);border-radius:999px}
+.seg.mono button{font-family:var(--mono);font-size:var(--t-xs)}
+
+/* ── glassmorphism ────────────────────────────────────────────────────────
+   Every group of buttons that switches between options is one frosted trough
+   with a single pane of glass in it. The pane is a ::before positioned from
+   --gx/--gy/--gw/--gh, which glide() measures off the pressed button, so it
+   slides to whatever was clicked instead of the fill jumping between them. */
+.seg,.screens,.tgl{position:relative;isolation:isolate;border:1px solid var(--line);border-radius:999px;
+  background:color-mix(in oklab,var(--surface-2) 62%,transparent);
+  -webkit-backdrop-filter:blur(14px) saturate(1.45);backdrop-filter:blur(14px) saturate(1.45)}
+.seg::before,.screens::before,.tgl::before{
+  content:"";position:absolute;z-index:-1;left:0;top:0;pointer-events:none;
+  width:var(--gw,0);height:var(--gh,0);transform:translate(var(--gx,0px),var(--gy,0px));
+  border-radius:999px;border:1px solid var(--glass-line);
+  background:linear-gradient(158deg,var(--glass),var(--glass-2)),
+             color-mix(in oklab,var(--accent) 9%,transparent);
+  box-shadow:0 2px 10px var(--glass-sh),inset 0 1px 0 var(--glass-hi),
+             inset 0 0 0 1px color-mix(in oklab,var(--accent) 22%,transparent);
+  -webkit-backdrop-filter:blur(10px) saturate(1.6);backdrop-filter:blur(10px) saturate(1.6);
+  opacity:var(--gon,0);
+  transition:transform .34s cubic-bezier(.32,1.25,.42,1),width .34s cubic-bezier(.32,1.25,.42,1),
+             height .34s cubic-bezier(.32,1.25,.42,1),opacity .18s}
+/* a group that has just been revealed has nowhere to slide from, so it lands rather than flies */
+.seg.nofx::before,.screens.nofx::before,.tgl.nofx::before{transition:opacity .18s}
+.seg button[aria-pressed="true"],.screens button[aria-pressed="true"],.tgl button[aria-pressed="true"]{
+  color:var(--ink);font-weight:600}
+.seg button:hover:not([aria-pressed="true"]),.screens button:hover:not([aria-pressed="true"]),
+.tgl button:hover:not([aria-pressed="true"]){color:var(--ink)}
+@media (prefers-reduced-motion: reduce){.seg::before,.screens::before,.tgl::before{transition:opacity .18s}}
+.sw{display:inline-flex;align-items:center;gap:10px;font-size:var(--t-sm);cursor:pointer}
+.sw input{position:absolute;opacity:0;width:0;height:0}
+.sw i{width:38px;height:21px;border-radius:999px;position:relative;flex:none;border:1px solid var(--glass-line);
+  background:color-mix(in oklab,var(--inset) 60%,transparent);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  box-shadow:inset 0 1px 3px var(--glass-sh);transition:background .2s,border-color .2s}
+.sw i::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;
+  background:linear-gradient(158deg,var(--glass),var(--glass-2));border:1px solid var(--glass-line);
+  box-shadow:0 1px 4px var(--glass-sh),inset 0 1px 0 var(--glass-hi);
+  transition:transform .26s cubic-bezier(.32,1.25,.42,1),background .2s}
+.sw input:checked+i{background:color-mix(in oklab,var(--accent) 62%,transparent);border-color:var(--accent)}
+.sw input:checked+i::after{transform:translateX(17px);background:linear-gradient(158deg,#fff,rgba(255,255,255,.8))}
+.sw input:focus-visible+i{outline:3px solid var(--accent);outline-offset:2px}
+.sws{display:flex;flex-wrap:wrap;gap:10px 22px}
+details.more>summary{font-size:var(--t-sm);color:var(--ink-2);cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:8px;padding:4px 0}
+details.more>summary::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg)}
+details.more[open]>summary::before{transform:rotate(45deg)}
+details.more>summary b{color:var(--ink);font-weight:600}
+details.more>*:not(summary){margin-top:14px}
+.slider{display:flex;flex-direction:column;gap:6px;min-width:0}
+.slider .sl-hd{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.slider .sl-hd label{font-size:var(--t-sm);color:var(--ink-2)}
+.slider .sl-val{display:inline-flex;align-items:baseline;gap:5px}
+.slider .sl-val input{width:5.5em;padding:3px 7px;text-align:right;font-family:var(--mono);font-size:var(--t-sm);border-radius:7px}
+.slider .sl-val small{font-size:var(--t-xs);color:var(--ink-3)}
+.slider input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;margin:0;cursor:pointer}
+.slider input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(90deg,var(--accent) var(--f,0%),var(--line-2) var(--f,0%))}
+.slider input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--line-2)}
+.slider input[type=range]::-moz-range-progress{height:4px;border-radius:2px;background:var(--accent)}
+.slider input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--surface);border:3px solid var(--accent);margin-top:-6px}
+.slider input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--surface);border:3px solid var(--accent)}
+.kindseg{align-self:flex-start;margin-bottom:2px}
+.kindseg button{padding:4px 11px;font-size:var(--t-xs)}
+.dials{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px 26px}
+
+/* condition editor */
+.conds{display:grid;grid-template-columns:repeat(auto-fill,minmax(184px,1fr));gap:8px;margin-bottom:20px}
+.cond{display:flex;flex-direction:column;gap:3px;align-items:flex-start;text-align:left;padding:10px 12px;
+  border:1px solid var(--line);border-radius:10px;color:var(--ink-2);
+  background:color-mix(in oklab,var(--surface-2) 58%,transparent);
+  -webkit-backdrop-filter:blur(12px) saturate(1.35);backdrop-filter:blur(12px) saturate(1.35);
+  transition:border-color .14s,background .14s,box-shadow .14s}
+.cond b{font-family:var(--mono);font-size:var(--t-sm);font-weight:600;color:var(--ink)}
+.cond span{font-size:var(--t-xs);line-height:1.35;color:var(--ink-3)}
+.cond:hover{border-color:var(--line-3);background:var(--surface)}
+.cond[aria-pressed="true"]{border-color:var(--accent);
+  background:linear-gradient(158deg,var(--glass),var(--glass-2));
+  box-shadow:inset 0 0 0 1px var(--accent),inset 0 1px 0 var(--glass-hi),0 3px 12px var(--glass-sh)}
+.cond[aria-pressed="true"] b{color:var(--accent)}
+.cond[aria-pressed="true"] span{color:var(--ink-2)}
+@media (max-width:560px){.conds{grid-template-columns:1fr 1fr}.cond span{display:none}}
+.cond:hover{border-color:var(--accent)}
+.cond[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cond[aria-pressed="true"] b{color:var(--accent)}
+.ed-hd{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.ed-hd h3{font-family:var(--mono);font-size:var(--t-xl);font-weight:500}
+.summary{margin:6px 0 18px;color:var(--ink-2);font-size:var(--t-sm)}
+.pdesc{font-size:var(--t-xs);color:var(--ink-3);line-height:1.5}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px 24px}
+.fields .wide{grid-column:1/-1}
+.err{color:var(--crit);font-size:var(--t-sm);margin-top:12px;font-weight:500}
+.err:empty{display:none}
+.warnbox{margin-top:12px;font-size:var(--t-xs);color:var(--ink-2);padding:10px 12px;border-radius:9px;background:var(--warn-soft);border-left:4px solid var(--warn)}
+.addrow{display:flex;gap:14px;align-items:center;margin-top:16px;flex-wrap:wrap}
+.addrow .btn.add{margin-left:auto;border-color:var(--accent);color:var(--accent)}
+.pool{display:flex;flex-direction:column;gap:8px}
+.prow{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);flex-wrap:wrap}
+.prow .bar{width:10px;height:10px;border-radius:50%;background:var(--accent);flex:none}
+.prow .s{font-family:var(--mono);font-size:var(--t-xs);flex:1;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.prow select{width:auto;padding:3px 9px;font-size:var(--t-xs);border-radius:999px}
+.prow .x{border:0;background:transparent;color:var(--ink-3);width:26px;height:26px;border-radius:50%}
+.prow .x:hover{color:var(--crit);background:var(--crit-soft)}
+
+/* the command, the loudest thing on the setup screen */
+.cmdwrap{margin-top:16px}
+pre.cmd{margin:0;padding:14px 16px 14px 34px;background:var(--screen);color:var(--screen-ink);border-radius:12px;font-size:var(--t-sm);line-height:1.6;white-space:pre-wrap;word-break:break-all;position:relative;border:1px solid var(--line)}
+pre.cmd::before{content:"$";position:absolute;left:14px;top:14px;color:var(--accent-2)}
+pre.specbox{margin:0;padding:12px 14px;background:var(--screen);color:var(--screen-ink);border-radius:10px;border:1px solid var(--line);font-family:var(--mono);font-size:var(--t-sm);overflow-x:auto;white-space:nowrap}
+pre.specbox .fl{color:var(--accent-2)}
+pre.cmd .f{color:var(--accent-2)} pre.cmd .c{color:var(--screen-dim)} pre.cmd .k{color:#93C5FD}
+.outhd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.outhd .t{font-size:var(--t-sm);color:var(--ink-2)}
+pre.out{margin:0;padding:12px 14px;background:var(--screen);color:var(--screen-ink);border-radius:10px;font-size:var(--t-xs);line-height:1.6;overflow:auto;max-height:300px;white-space:pre;border:1px solid var(--line)}
+pre.out .c{color:var(--screen-dim)}
+.problems{display:flex;flex-direction:column;gap:7px;margin-top:14px}
+.problems:empty{display:none}
+.problems button{all:unset;cursor:pointer;color:var(--crit);font-size:var(--t-sm);font-weight:500}
+.problems button u{color:var(--ink-2)}
+.driftline{color:var(--warn);font-size:var(--t-xs)}
+.cardhd{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.cardhd h3{flex:1;min-width:0}
+.startrow{display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap;margin:12px 0 0}
+.startrow:empty{display:none}
+.fire{border:1px solid color-mix(in oklab,var(--accent) 60%,var(--glass-line));border-radius:11px;padding:9px 16px;
+  display:inline-flex;align-items:center;gap:10px;color:var(--accent-ink);
+  background:linear-gradient(158deg,color-mix(in oklab,#fff 26%,var(--accent)),var(--accent));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.38),0 4px 14px color-mix(in oklab,var(--accent) 34%,transparent);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:filter .16s,box-shadow .16s}.fire:hover:not(:disabled){filter:brightness(1.08)}
+.fire:disabled{cursor:not-allowed;background:color-mix(in oklab,var(--inset) 70%,transparent);color:var(--ink-3);
+  border-color:var(--glass-line);box-shadow:inset 0 1px 0 var(--glass-hi)}
+.fire .big{font-family:var(--disp);font-weight:700;font-size:var(--t-md);line-height:1}
+.fire .arrow{font-family:var(--disp);font-size:var(--t-md);line-height:1}
+.startsub{font-size:var(--t-xs);color:var(--ink-2)}
+.poolempty{font-size:var(--t-sm);color:var(--ink-3);margin:0}
+.why{font-size:var(--t-xs);color:var(--ink-3)}
+
+/* run screen */
+.runtop{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.runtop h2{font-family:var(--disp);font-size:var(--t-2xl);line-height:1.02}
+.runtop .spacer{flex:1}
+.clock{font-family:var(--disp);font-size:var(--t-2xl);font-weight:600;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
+.runtop.live .clock{color:var(--accent)}
+.clock{font-variant-numeric:tabular-nums lining-nums;min-width:8ch;text-align:right}
+.schedt{font-family:var(--mono);font-size:var(--t-xs);color:var(--ink-3);white-space:nowrap}
+.simchip{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:var(--warn-soft);border:2px solid var(--warn);color:var(--ink);font-size:var(--t-sm);font-weight:600}
+.simchip::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--warn)}
+.runcmd{font-family:var(--mono);font-size:var(--t-xs);color:var(--screen-ink);background:var(--screen);border:1px solid var(--line);border-radius:10px;padding:10px 13px;overflow-x:auto;white-space:nowrap;margin-bottom:16px}
+.rungrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.62fr);gap:22px;align-items:start}
+/* a grid item defaults to min-width:auto, so it refuses to be narrower than its longest
+   unbroken token and spills past the column instead. Let both columns be as narrow as the
+   track says they are. */
+.rungrid>*{min-width:0}
+@media (max-width:980px){.rungrid{grid-template-columns:1fr}}
+.tiles{display:flex;gap:14px;flex-wrap:wrap}
+.tile{flex:1 1 140px;min-width:0;padding:14px 16px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+.tile .l{font-size:var(--t-xs);color:var(--ink-3)}
+.tile .v{font-family:var(--disp);font-size:var(--t-2xl);font-weight:600;line-height:1;font-variant-numeric:tabular-nums;margin-top:4px}
+.tile .v small{font-family:var(--sans);font-size:var(--t-sm);color:var(--ink-3);font-weight:400;margin-left:7px}
+.tile.amber .v{color:var(--warn)} .tile.good .v{color:var(--good)} .tile.crit .v{color:var(--crit)}
+.tile .sub{font-size:var(--t-xs);color:var(--ink-3);margin-top:6px;line-height:1.35;overflow-wrap:anywhere}
+.spark{margin-top:6px} .spark svg{display:block;width:100%;height:38px;overflow:visible}
+.spark .cpu{fill:none;stroke:var(--accent);stroke-width:1.6} .spark .mem{fill:none;stroke:var(--ink-3);stroke-width:1.2;stroke-dasharray:3 2}
+.spark .cap{stroke:var(--warn);stroke-width:1;stroke-dasharray:2 3}
+.verdict{margin-top:12px;padding:12px 14px;border-radius:10px;border-left:4px solid var(--ink-3);background:var(--surface);font-size:var(--t-sm);overflow-wrap:anywhere}
+.verdict.amber{border-color:var(--warn);background:var(--warn-soft)} .verdict.good{border-color:var(--good)} .verdict.crit{border-color:var(--crit)}
+.verdict b{font-family:var(--disp)} .verdict .why{display:block;color:var(--ink-2);font-size:var(--t-xs);margin-top:4px}
+.ab{width:100%;border-collapse:collapse;margin-top:10px;font-size:var(--t-xs)} .ab th{text-align:left;color:var(--ink-3);font-weight:500;padding:4px 8px;border-bottom:1px solid var(--line)}
+.ab td{padding:4px 8px;border-bottom:1px solid var(--line)} .ab td.ok{color:var(--good)} .ab td.fail{color:var(--crit)} .ab td.na{color:var(--ink-3)}
+.baserow{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.basegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:8px;margin-top:12px}
+.basegrid div{padding:8px 10px;border-radius:8px;background:var(--surface);border:1px solid var(--line)}
+.basegrid .bl{font-size:var(--t-xs);color:var(--ink-3)} .basegrid .bv{font-family:var(--disp);font-size:var(--t-md);font-variant-numeric:tabular-nums;margin-top:2px}
+.basegrid .bv.warn{color:var(--warn)} .basenote{margin-top:10px;font-size:var(--t-xs);color:var(--ink-2);line-height:1.45}
+.basenote b{color:var(--warn)}
+.runbanner{margin:10px 0 0;padding:10px 12px;border-radius:9px;background:var(--warn-soft);border-left:4px solid var(--warn);font-size:var(--t-xs);color:var(--ink-2)}
+.tile.crit{border-color:var(--crit)} .tile.crit .v{color:var(--crit)}
+.tile.good .v{color:var(--good)}
+.strip{margin-top:16px}
+.strip .cells{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.strip .c{width:30px;height:54px;border-radius:6px;background:var(--inset);border:1px solid var(--line);position:relative}
+.strip .c.ok{background:var(--good);border-color:var(--good)}
+.strip .c.fail{background:var(--crit);border-color:var(--crit)}
+.strip .c.now{border-color:var(--accent);border-width:3px}
+.strip .c span{position:absolute;left:50%;bottom:3px;transform:translateX(-50%);font-size:9px;font-family:var(--mono);color:rgba(0,0,0,.55)}
+.invline{margin-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:var(--t-sm)}
+.invline .badge{display:inline-flex;align-items:center;gap:8px;padding:6px 13px;border-radius:999px;border:2px solid var(--line-2);font-weight:600}
+.invline .badge.ok{border-color:var(--good);color:var(--good)}
+.invline .badge.fail{border-color:var(--crit);color:var(--crit)}
+.invline .badge.wait{border-color:var(--warn);color:var(--warn)}
+.findings{margin-top:18px;display:flex;flex-direction:column;gap:14px}
+.finding{padding:16px 18px;border-radius:12px;border:2px solid var(--crit);background:var(--crit-soft);font-size:var(--t-sm);line-height:1.55;overflow-wrap:anywhere}
+.finding .top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.finding .tk{font-family:var(--mono);font-size:var(--t-md);font-weight:600;color:var(--crit)}
+.finding .meta{font-size:var(--t-xs);color:var(--ink-3)}
+.finding .simtag{font-size:var(--t-xs);font-weight:700;color:var(--ink);background:var(--warn);padding:2px 8px;border-radius:5px}
+.finding .repro{margin-top:10px;font-family:var(--mono);font-size:var(--t-xs);padding:9px 11px;background:var(--screen);color:var(--screen-ink);border-radius:8px;overflow-x:auto;white-space:nowrap}
+/* These hold raw runner lines -- a spec, a container name, a redis key -- which are long and
+   often have no space to break at. Without this the line runs straight out of its rounded box
+   and over whatever sits beside it. `anywhere` rather than `break-word` because it also tells
+   the grid the column may be narrower than the longest token, so the track stops being sized
+   by one runaway line. The command bar and the repro line are deliberately left scrolling
+   instead: those are meant to be copied whole, and a break would be a lie about the command. */
+.pinned{margin-top:16px;display:flex;flex-direction:column;gap:6px;font-family:var(--mono);font-size:var(--t-xs);min-width:0}
+.pinned div{padding:7px 11px;border-radius:8px;background:var(--surface-2);border-left:4px solid var(--line-3);color:var(--ink-2);overflow-wrap:anywhere}
+.pinned div.fault{border-left-color:var(--accent);color:var(--ink)}
+.pinned div.fail{border-left-color:var(--crit);color:var(--ink)}
+.pinned div.ok{border-left-color:var(--good)}
+.logwrap{margin-top:22px}
+.logwrap .log{height:440px}
+.log{height:300px;overflow:auto;background:var(--screen);color:var(--screen-ink);border-radius:10px;padding:13px 15px;font-family:var(--mono);font-size:var(--t-xs);line-height:1.6;white-space:pre-wrap;word-break:break-word;border:1px solid var(--line)}
+.log:empty::before{content:"Waiting for a run.";color:var(--screen-dim)}
+.log .ln{display:block}
+.log .ts{color:var(--screen-dim)} .log .lv-fault{color:var(--accent-2)} .log .lv-ok{color:var(--good)} .log .lv-fail{color:var(--crit)} .log .lv-warn{color:var(--warn)} .log .lv-dim{color:var(--screen-dim)} .log .lv-sys{color:#93C5FD}
+.log .lv-fail.hl{background:color-mix(in oklab,var(--crit) 22%,transparent);margin:0 -15px;padding:0 15px 0 13px;border-left:3px solid var(--crit)}
+kbd{font-family:var(--mono);font-size:.9em;border:1px solid var(--line-2);border-radius:4px;padding:1px 5px}
+
+.stepnav{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;margin-top:18px}
+.stepnav span{font-size:var(--t-xs);color:var(--ink-3)}
+.stepnav .btn[aria-current="true"]{color:var(--ink);border-color:var(--glass-line)}
+/* ═══════════════════════════ Liquid Glass ═══════════════════════════
+   One optical recipe for every surface you can press. Real glass has four things a flat
+   button does not: a bright rim where light catches the top edge, a darker shade where it
+   leaves the bottom, a specular streak that moves when you do, and depth -- an ambient shadow
+   far away plus a tight contact shadow underneath. Each rule below is one of those four.
+   Appended last on purpose: it wins by cascade order without editing the rules above, so it
+   survives an upstream rebase intact. Segment buttons deliberately keep position:static --
+   glide() measures the sliding thumb off offsetLeft, and a positioned child would move the
+   offsetParent and send the thumb to the wrong place. */
+:root{
+  --lg-blur:18px; --lg-sat:1.75;
+  --lg-spring:cubic-bezier(.34,1.56,.64,1);      /* overshoots slightly, settles: a press that feels sprung */
+  --lg-ease:cubic-bezier(.2,.8,.2,1);
+  --lg-rim:inset 0 1px 0 var(--glass-hi);          /* light catching the top edge */
+  --lg-shade:inset 0 -1px 0 rgba(0,0,0,.20);       /* light leaving the bottom edge */
+  --lg-edge:inset 1px 0 0 rgba(255,255,255,.10);   /* a thin catch down the left */
+  --lg-ambient:0 14px 34px -14px var(--glass-sh);
+  --lg-contact:0 1px 2px var(--glass-sh);
+  --lg-sheen:linear-gradient(180deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,.06) 42%,rgba(255,255,255,0) 60%);
+  --lg-caustic:linear-gradient(115deg,transparent 0 38%,rgba(255,255,255,.28) 50%,transparent 62% 100%);
+}
+:root[data-theme="light"]{--lg-shade:inset 0 -1px 0 rgba(13,18,24,.10);--lg-edge:inset 1px 0 0 rgba(255,255,255,.55)}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--lg-shade:inset 0 -1px 0 rgba(13,18,24,.10);--lg-edge:inset 1px 0 0 rgba(255,255,255,.55)}}
+
+/* ── the pane: buttons, cards you press, the pool rows, the tiles ── */
+.btn,.fire,.cond,.prow,.tile,.verdict,.basegrid div,.runbanner,.warnbox{
+  position:relative;isolation:isolate;overflow:hidden;
+  border:1px solid var(--glass-line);
+  background:var(--lg-sheen),color-mix(in oklab,var(--surface) 52%,transparent);
+  -webkit-backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-sat)) brightness(1.04);
+  backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-sat)) brightness(1.04);
+  box-shadow:var(--lg-rim),var(--lg-shade),var(--lg-edge),var(--lg-ambient),var(--lg-contact);
+  transition:transform .28s var(--lg-spring),box-shadow .28s var(--lg-ease),border-color .2s,background .2s,filter .2s}
+.btn,.cond,.prow{border-radius:14px}
+.tile,.verdict,.basegrid div{border-radius:16px}
+/* the specular streak: parked off the left edge, slides across the face on hover */
+.btn::after,.fire::after,.cond::after,.prow::after{
+  content:"";position:absolute;inset:-40% -60%;z-index:-1;pointer-events:none;
+  background:var(--lg-caustic);transform:translateX(-70%) rotate(0.001deg);opacity:0;
+  transition:transform .75s var(--lg-ease),opacity .35s}
+.btn:hover::after,.fire:hover:not(:disabled)::after,.cond:hover::after,.prow:hover::after{transform:translateX(70%);opacity:1}
+/* lift on hover, spring on press */
+.btn:hover:not(:disabled),.cond:hover,.prow:hover{transform:translateY(-1px);border-color:var(--line-3);
+  box-shadow:var(--lg-rim),var(--lg-shade),var(--lg-edge),0 20px 40px -16px var(--glass-sh),var(--lg-contact)}
+.btn:active:not(:disabled),.cond:active,.fire:active:not(:disabled),.seg button:active,.screens button:active,.tgl button:active,.prow .x:active{
+  transform:scale(.965);transition-duration:.09s}
+/* focus is a soft accent halo in the glass, not a hard system ring */
+.btn:focus-visible,.fire:focus-visible,.cond:focus-visible,.prow .x:focus-visible,.seg button:focus-visible,.screens button:focus-visible,.tgl button:focus-visible,details.more>summary:focus-visible{
+  outline:0;box-shadow:var(--lg-rim),var(--lg-shade),0 0 0 3px color-mix(in oklab,var(--accent) 45%,transparent),var(--lg-ambient)}
+.btn.ghost{background:transparent;border-color:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+.btn.ghost:hover{background:var(--lg-sheen),color-mix(in oklab,var(--surface) 52%,transparent);border-color:var(--glass-line);
+  box-shadow:var(--lg-rim),var(--lg-shade),var(--lg-contact);-webkit-backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-sat));backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-sat))}
+.btn.danger{border-color:color-mix(in oklab,var(--crit) 55%,var(--glass-line));background:var(--lg-sheen),color-mix(in oklab,var(--crit) 14%,transparent)}
+.btn:disabled{opacity:.5;transform:none;box-shadow:var(--lg-rim),var(--lg-contact)}
+.tile,.verdict,.basegrid div,.runbanner,.warnbox{transition:none}   /* surfaces, not controls: no lift, no streak */
+
+/* ── the hero: Start run is tinted glass over the accent, with a slow ambient glow ── */
+.fire{border-radius:16px;padding:11px 18px;
+  border:1px solid color-mix(in oklab,var(--accent) 65%,var(--glass-hi));
+  background:var(--lg-sheen),
+    radial-gradient(120% 140% at 20% 0%,color-mix(in oklab,#fff 34%,var(--accent)) 0%,transparent 55%),
+    linear-gradient(158deg,color-mix(in oklab,var(--accent) 88%,#fff),color-mix(in oklab,var(--accent) 78%,#3A1400));
+  color:var(--accent-ink);
+  -webkit-backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-sat));backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-sat));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(0,0,0,.22),
+    0 0 0 1px color-mix(in oklab,var(--accent) 30%,transparent),
+    0 12px 30px -10px color-mix(in oklab,var(--accent) 55%,transparent),var(--lg-contact);
+  animation:lg-glow 3.4s ease-in-out infinite}
+.fire:hover:not(:disabled){filter:brightness(1.06) saturate(1.05);transform:translateY(-1px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.65),inset 0 -1px 0 rgba(0,0,0,.22),
+    0 0 0 1px color-mix(in oklab,var(--accent) 40%,transparent),
+    0 18px 40px -12px color-mix(in oklab,var(--accent) 70%,transparent),var(--lg-contact)}
+.fire .arrow{transition:transform .28s var(--lg-spring)}.fire:hover:not(:disabled) .arrow{transform:translateX(4px)}
+.fire:disabled{animation:none;color:var(--ink-3);border-color:var(--glass-line);
+  background:var(--lg-sheen),color-mix(in oklab,var(--inset) 60%,transparent);
+  box-shadow:var(--lg-rim),var(--lg-shade),var(--lg-contact);transform:none;filter:none}
+@keyframes lg-glow{0%,100%{box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(0,0,0,.22),0 0 0 1px color-mix(in oklab,var(--accent) 30%,transparent),0 12px 30px -10px color-mix(in oklab,var(--accent) 50%,transparent),var(--lg-contact)}
+  50%{box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(0,0,0,.22),0 0 0 1px color-mix(in oklab,var(--accent) 42%,transparent),0 16px 38px -10px color-mix(in oklab,var(--accent) 72%,transparent),var(--lg-contact)}}
+
+/* ── condition cards: a pressed one is accent-tinted glass with an inner glow ── */
+.cond[aria-pressed="true"]{border-color:color-mix(in oklab,var(--accent) 70%,var(--glass-line));
+  background:var(--lg-sheen),color-mix(in oklab,var(--accent) 16%,transparent),color-mix(in oklab,var(--surface) 40%,transparent);
+  box-shadow:var(--lg-rim),var(--lg-shade),inset 0 0 0 1px color-mix(in oklab,var(--accent) 35%,transparent),
+    inset 0 0 28px -10px color-mix(in oklab,var(--accent) 45%,transparent),var(--lg-ambient),var(--lg-contact)}
+
+/* ── segmented controls and the step switcher: deeper track, brighter sliding thumb ── */
+.seg,.screens,.tgl{border-color:var(--glass-line);
+  background:linear-gradient(180deg,rgba(0,0,0,.10),transparent 55%),color-mix(in oklab,var(--surface-2) 58%,transparent);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.18),var(--lg-edge);
+  -webkit-backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-sat));backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-sat))}
+.seg::before,.screens::before,.tgl::before{
+  background:var(--lg-sheen),linear-gradient(158deg,var(--glass),var(--glass-2)),color-mix(in oklab,var(--accent) 11%,transparent);
+  box-shadow:var(--lg-rim),var(--lg-shade),0 4px 14px -4px var(--glass-sh),inset 0 0 0 1px color-mix(in oklab,var(--accent) 26%,transparent);
+  transition:transform .42s var(--lg-spring),width .42s var(--lg-spring),height .42s var(--lg-spring),opacity .18s}
+.seg button,.screens button,.tgl button{transition:color .16s,transform .18s var(--lg-spring)}
+
+/* ── switches: a glass track and a knob with its own highlight ── */
+.sw i{border-color:var(--glass-line);
+  background:linear-gradient(180deg,rgba(0,0,0,.14),transparent 60%),color-mix(in oklab,var(--surface-2) 70%,transparent);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.22),var(--lg-edge);
+  transition:background .28s var(--lg-ease),border-color .28s,box-shadow .28s}
+.sw i::after{background:radial-gradient(circle at 35% 30%,#fff 0%,rgba(255,255,255,.82) 55%,rgba(220,228,240,.9) 100%);
+  box-shadow:0 1px 3px rgba(0,0,0,.35),inset 0 -1px 0 rgba(0,0,0,.08),inset 0 1px 0 rgba(255,255,255,.9);
+  transition:transform .32s var(--lg-spring),background .28s}
+.sw input:checked+i{background:linear-gradient(180deg,rgba(255,255,255,.18),transparent 60%),color-mix(in oklab,var(--accent) 78%,transparent);
+  border-color:color-mix(in oklab,var(--accent) 80%,var(--glass-hi));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 2px rgba(0,0,0,.18),0 0 14px -4px color-mix(in oklab,var(--accent) 60%,transparent)}
+.sw:hover i::after{transform:scale(1.06)}.sw input:checked:hover+i::after{transform:translateX(17px) scale(1.06)}
+
+/* ── pool rows: the remove control becomes a glass disc on hover ── */
+.prow{background:var(--lg-sheen),color-mix(in oklab,var(--surface-2) 52%,transparent)}
+.prow.flash{border-color:var(--accent);box-shadow:var(--lg-rim),var(--lg-shade),0 0 0 3px color-mix(in oklab,var(--accent) 45%,transparent),var(--lg-ambient)}
+.prow .x{transition:transform .22s var(--lg-spring),background .18s,color .18s,box-shadow .18s}
+.prow .x:hover{background:var(--lg-sheen),color-mix(in oklab,var(--crit) 18%,transparent);color:var(--crit);
+  box-shadow:var(--lg-rim),inset 0 0 0 1px color-mix(in oklab,var(--crit) 40%,transparent);transform:scale(1.08)}
+
+/* ── disclosure summaries and the text-only problem links get a glass pill on hover ── */
+details.more>summary{border-radius:999px;padding:6px 12px;margin-left:-12px;transition:background .18s,box-shadow .18s,color .16s}
+details.more>summary:hover{color:var(--ink);background:var(--lg-sheen),color-mix(in oklab,var(--surface) 55%,transparent);
+  box-shadow:var(--lg-rim),var(--lg-contact)}
+details.more>summary::before{transition:transform .28s var(--lg-spring)}
+.problems button{border-radius:999px;padding:4px 10px;margin-left:-10px;transition:background .18s,box-shadow .18s}
+.problems button:hover{background:var(--lg-sheen),color-mix(in oklab,var(--crit) 12%,transparent);box-shadow:var(--lg-rim),var(--lg-contact)}
+
+/* ── status pills breathe the same glass ── */
+.pill{padding:5px 11px;border-radius:999px;border:1px solid var(--glass-line);
+  background:var(--lg-sheen),color-mix(in oklab,var(--surface) 50%,transparent);
+  -webkit-backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-sat));backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-sat));
+  box-shadow:var(--lg-rim),var(--lg-contact)}
+.pill .dot{box-shadow:0 0 0 2px color-mix(in oklab,currentColor 0%,transparent),0 0 10px -1px currentColor}
+
+/* ── without backdrop-filter the glass would be see-through to the point of unreadable ── */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .btn,.cond,.prow,.tile,.verdict,.basegrid div,.seg,.screens,.tgl,.sw i,.pill{background:var(--surface)}
+  .fire{background:linear-gradient(158deg,color-mix(in oklab,#fff 26%,var(--accent)),var(--accent))}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><h1>chaos<b>SONiC</b></h1></div>
+    <nav class="screens" role="group" aria-label="Screen">
+      <button data-go="1" aria-pressed="true">Set up</button>
+      <button data-go="2" aria-pressed="false">Run</button>
+    </nav>
+    <span class="spacer"></span>
+    <div class="tools">
+      <span class="pill" id="backendPill"><span class="dot"></span><span id="backendText">checking runner…</span></span>
+      <span class="pill" id="runPill"><span class="dot"></span><span id="runText">idle</span></span>
+      <div class="tgl" role="group" aria-label="Theme">
+        <button type="button" data-theme-set="dark" aria-pressed="true">Dark</button>
+        <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-set="system" aria-pressed="false">Auto</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ══ screen 1: set up ══ -->
+    <section class="screen active" data-screen="1">
+      <div class="hd"><h2>Set up the run</h2><p>Pick the switch, tune one condition, press the button. Everything the plugin can express is here; the parts you rarely change are folded away.</p></div>
+      <div class="setup">
+        <div>
+          <div class="card">
+            <h3>Condition</h3>
+            <div class="conds" id="conds"></div>
+            <div id="editor"></div>
+          </div>
+          <div class="card" id="poolCard">
+            <div class="cardhd">
+              <h3>Condition pool <span class="hint" id="poolMeta"></span></h3>
+              <button class="fire" id="start"><span class="big">Start run</span><span class="arrow">→</span></button>
+            </div>
+            <div class="pool" id="pool"></div>
+            <p class="note" id="schedK"></p>
+            <div class="problems" id="problems"></div>
+            <p class="startrow"><span class="startsub" id="startSub"></span><span class="why" id="startWhy"></span></p>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <h3>Device under test</h3>
+            <div class="field"><label for="dutSel">Testbed</label><input type="text" id="dutSel" class="mono" placeholder="switch name" autocomplete="off" spellcheck="false" list="dutKnown"><datalist id="dutKnown"></datalist></div>
+            <div class="baserow"><button class="btn sm ghost" id="probeBase">Read box state</button><span class="hint" id="baseHint">Whether a repro means anything depends on what is on the box.</span></div>
+            <div id="baseOut"></div>
+          </div>
+          <div class="card" id="schemaCard" hidden>
+            <details class="more"><summary>Plugin schema <b id="schemaN"></b></summary><div id="schemaBody"></div></details>
+          </div>
+          <div class="card">
+            <h3>Contract</h3>
+            <p class="k" id="contractLine"></p>
+            <details class="more" id="contractAdv">
+              <summary>Advanced <b id="contractAdvN"></b></summary>
+              <div>
+                <p class="k">Invariants, re-checked after every fault</p>
+                <div class="seg" id="invSeg" role="group" aria-label="Invariant group"></div>
+                <p class="note" id="invWhat"></p>
+                <p class="k" style="margin-top:16px">Steady state, must pass before the first fault</p>
+                <div class="seg" id="steadySeg" role="group" aria-label="Steady-state group"></div>
+                <p class="note" id="steadyWhat"></p>
+                <div class="dials" style="margin-top:18px" id="contractDials"></div>
+                <input type="hidden" id="recoverWithin" value="180s"><input type="hidden" id="duration" value="10m"><input type="hidden" id="minGap" value="90s"><input type="hidden" id="count" value="">
+                <div class="two" style="margin-top:16px">
+                  <div class="field"><label for="seed">Seed</label><div class="rowline" style="gap:8px"><input type="number" id="seed" value="20260911" min="0" step="1" class="mono"><button class="btn sm" id="reseed">New</button></div></div>
+                  <div class="field"><label for="expName">Experiment name</label><input type="text" id="expName" value="orchagent-restart-consistency" class="mono"></div>
+                </div>
+                <div class="field" style="margin-top:14px"><label for="tests">Test module, for the sonic-mgmt runner (relative to its tests/ directory)</label><input type="text" id="tests" value="pc/test_po_update.py" class="mono"></div>
+                <div class="rowline" style="margin-top:16px">
+                  <div class="seg" role="group" aria-label="Launch as"><button id="modeFile" aria-pressed="true">Experiment file</button><button id="modeFlags" aria-pressed="false">--chaos flags</button></div>
+                  <label class="sw"><input type="checkbox" id="dryRun"><i></i>Dry run</label>
+                  <label class="sw"><input type="checkbox" id="baseline"><i></i>Ignore pre-existing divergences</label>
+                </div>
+                <details class="more" style="margin-top:14px"><summary>Runner: <b id="presetName"></b></summary>
+                  <div><div class="seg" id="presetSeg" role="group" aria-label="Runner"></div><p class="note" id="presetWhy"></p><textarea id="runner" rows="3" spellcheck="false" readonly></textarea><p class="note">The equivalent command, for copy-paste. The console builds and runs it itself; it cannot be edited here.</p></div>
+                </details>
+                <details class="more" id="yamlWrap" style="margin-top:10px"><summary><b id="yamlName">experiment file</b></summary>
+                  <div><div class="outhd"><span class="t">Written next to the run when you start</span><button class="btn sm ghost" data-copy="yamlOut">Copy</button></div><pre class="out" id="yamlOut"></pre></div>
+                </details>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+      <div class="cmdwrap">
+        <div class="outhd"><span class="t">This is what runs</span><button class="btn sm ghost" data-copy="cmdOut">Copy</button></div>
+        <pre class="cmd" id="cmdOut"></pre>
+        <p class="note stepnav"><button type="button" class="btn sm ghost" data-go="1" title="Set up (or press ←)">← Set up</button><span>switch screens · ← → on the keyboard</span><button type="button" class="btn sm ghost" data-go="2" title="Run (or press →)">Run →</button></p>
+      </div>
+    </section>
+
+    <!-- ══ screen 2: run ══ -->
+    <section class="screen" data-screen="2">
+      <div class="runtop" id="runtop">
+        <h2>Run</h2>
+        <span class="simchip" id="simChip" hidden>Simulated, no DUT was touched</span>
+        <span class="spacer"></span>
+        <button class="btn danger" id="stop" hidden>Stop and release every fault</button>
+        <span class="schedt" id="schedT"></span><span class="clock" id="clock">0:00.00</span>
+      </div>
+      <div class="runcmd" id="runCmd"></div>
+      <div class="rungrid">
+        <div>
+          <div class="tiles">
+            <div class="tile" id="tFaults"><div class="l">Faults fired</div><div class="v">—</div></div>
+            <div class="tile" id="tFail"><div class="l">Verdict flips</div><div class="v">—</div></div>
+            <div class="tile" id="tBit"><div class="l">Fault bit?</div><div class="v">—</div><div class="sub">from the injector’s own status(), not the log</div></div>
+            <div class="tile" id="tTele" hidden><div class="l">Target container</div><div class="v">—</div><div class="spark"><svg viewBox="0 0 200 38" preserveAspectRatio="none"></svg></div><div class="sub"></div></div>
+          </div>
+          <div id="verdictBox"></div>
+          <div class="strip" id="stripWrap" hidden><p class="k" id="stripK"></p><div class="cells" id="stripCells"></div></div>
+          <div class="invline" id="invState"></div>
+          <div class="findings" id="findings"></div>
+        </div>
+        <div>
+          <p class="k" id="deckMeta">Nothing has run yet.</p>
+          <div class="pinned" id="pinned"></div>
+        </div>
+      </div>
+      <details class="more logwrap" open><summary>Full log <b id="logK"></b></summary>
+        <div class="log" id="log" aria-live="polite"></div>
+      </details>
+      <p class="note stepnav"><button type="button" class="btn sm ghost" data-go="1" title="Set up (or press ←)">← Set up</button><span>switch screens · ← → on the keyboard</span><button type="button" class="btn sm ghost" data-go="2" title="Run (or press →)" aria-current="true">Run →</button></p>
+    </section>
+  </main>
+
+</div>
+
+<script>
+/* ───────────────────────────── data ───────────────────────────── */
+const TARGETS = {
+  processes: {
+    orchagent:{c:'swss',w:'wpa_cli 10s; every *mgrd via APPL_DB; route/neigh programming'},
+    portsyncd:{c:'swss',w:'orchagent for port init'},
+    vlanmgrd:{c:'swss',w:'orchagent via APPL_DB'},
+    teammgrd:{c:'teamd',w:'teamd instances it spawns'},
+    teamd:{c:'teamd',w:'LACP partner, 3s × 3'},
+    syncd:{c:'syncd',w:'orchagent via sairedis, 60s response timeout'},
+    bgpd:{c:'bgp',w:'BGP peers (hold timer); zebra'},
+    zebra:{c:'bgp',w:'bgpd via ZAPI; fpmsyncd via FPM socket'},
+    fpmsyncd:{c:'bgp',w:'orchagent for ROUTE_TABLE in APPL_DB'},
+    bfdd:{c:'bgp',w:'micro-BFD peers at sub-second timers'},
+    lldpd:{c:'lldp',w:'neighbours, 120s TTL'},
+    macsecmgrd:{c:'macsec',w:'wpa_supplicant; MKA key-rotation timers'},
+    wpa_supplicant:{c:'macsec',w:'MKA peer'},
+    'redis-server':{c:'database',w:'everything; supervisor health checks'},
+  },
+  containers:['swss','syncd','gbsyncd','bgp','teamd','lldp','macsec','pmon','snmp','database','eventd','gnmi','mgmt-framework','otel','radv','restapi','sysmgr'],
+  protected:['redis-server','database'],
+};
+const TARGET_OPTIONS = [...Object.keys(TARGETS.processes), ...TARGETS.containers];
+
+/* Only these can be filled from the DUT alone: route/route6 with blackhole statics,
+   neighbor/nexthop with permanent ARP on a temporary subnet, nhg with ECMP routes over that
+   same pool, acl with drop rules. fdb needs a VLAN to learn into and mirror is not in this
+   platform's CRM at all, so both are refused with that specific reason rather than a PTF
+   peer or a config path the plugin has no handle on, and the injector refuses them rather
+   than injecting nothing. */
+const CRM = ['route','route6','neighbor','nexthop','nhg','acl'];
+const SAI_OBJECTS = ["acl_counter", "acl_entry", "acl_range", "acl_table", "acl_table_chain_group", "acl_table_group", "acl_table_group_member", "ars", "ars_profile", "bfd_session", "bridge", "bridge_port", "buffer_pool", "buffer_profile", "counter", "debug_counter", "dtel", "dtel_event", "dtel_int_session", "dtel_queue_report", "dtel_report_session", "fdb_entries", "fdb_entry", "fine_grained_hash_field", "generic_programmable", "hash", "hostif", "hostif_table_entry", "hostif_trap", "hostif_trap_group", "hostif_user_defined_trap", "icmp_echo_session", "ingress_priority_group", "inseg_entries", "inseg_entry", "ipmc_entry", "ipmc_group", "ipmc_group_member", "ipmc_groups", "ipsec", "ipsec_port", "ipsec_sa", "isolation_group", "isolation_group_member", "l2mc_entry", "l2mc_group", "l2mc_group_member", "lag", "lag_member", "macsec", "macsec_flow", "macsec_port", "macsec_sa", "macsec_sc", "mcast_fdb_entry", "mirror_session", "my_mac", "my_sid_entries", "my_sid_entry", "nat_entries", "nat_entry", "nat_zone_counter", "neighbor_entries", "neighbor_entry", "next_hop", "next_hop_group", "next_hop_group_map", "next_hop_group_member", "next_hop_groups", "next_hops", "poe_device", "poe_port", "poe_pse", "policer", "port", "port_connector", "port_llr_profile", "port_pool", "port_serdes", "port_serdess", "ports", "prefix_compression_entry", "prefix_compression_table", "qos_map", "queue", "route_entries", "route_entry", "router_interface", "router_interfaces", "rpf_group", "rpf_group_member", "samplepacket", "scheduler", "scheduler_group", "srv6_sidlist", "stp", "stp_port", "switch", "switch_tunnel", "synce_clock", "system_port", "tam", "tam_collector", "tam_counter_subscription", "tam_event", "tam_event_action", "tam_event_threshold", "tam_int", "tam_math_func", "tam_report", "tam_tel_type", "tam_telemetry", "tam_transport", "tunnel", "tunnel_map", "tunnel_map_entry", "tunnel_term_table_entry", "tunnels", "twamp_session", "udf", "udf_group", "udf_match", "virtual_router", "vlan", "vlan_member", "wred"];
+const SAI_OPS = ["create", "remove", "set", "get", "bulk_create", "bulk_remove", "all"];
+
+/* Which operations a given object type can actually be told to do. Mirrors
+   sai_catalog.BULK_TYPES / ENTRY_TYPES, generated from the SAI headers by shim/gen_tags.py --
+   regenerate both together after a SAI bump.
+
+   bulk: only 20 of the 126 types have a bulk entry point. On the other 106 the shim has
+   nothing to patch, so the rule would arm, matched would stay 0, and the run would report the
+   system held under a fault that was never applied.
+
+   entry: types whose create takes no output parameter, so dropping the call is safe. An
+   object-style create hands back a new object id; dropping that would leave it unwritten. */
+const SAI_BULK = new Set(['fdb_entry', 'inseg_entry', 'ipmc_group', 'lag_member', 'my_sid_entry', 'nat_entry', 'neighbor_entry', 'next_hop', 'next_hop_group', 'next_hop_group_member', 'port', 'port_serdes', 'prefix_compression_entry', 'route_entry', 'router_interface', 'srv6_sidlist', 'stp_port', 'tam_counter_subscription', 'tunnel', 'vlan_member']);
+const SAI_ENTRY = new Set(['fdb_entry', 'inseg_entry', 'ipmc_entry', 'l2mc_entry', 'mcast_fdb_entry', 'my_sid_entry', 'nat_entry', 'neighbor_entry', 'prefix_compression_entry', 'route_entry']);
+const saiOpsFor = (t) => SAI_OPS.filter(o => !o.startsWith('bulk_') || SAI_BULK.has(t));
+/* The six object types worth reaching for first: each is either covered by one of the oracle's
+   invariants or is the subject of a filed bug. The other 120 stay one group down rather than
+   being cut, because the fidelity of the full catalogue is part of the point. */
+const SAI_COMMON = ['route_entry','vlan_member','lag_member','neighbor_entry','next_hop_group_member','my_sid_entry'];
+const SAI_COMMON_WHY = {
+  route_entry:'routes — oracle route_check',
+  vlan_member:'VLAN members — oracle vlan_member',
+  lag_member:'LAG members — oracle lag_member',
+  neighbor_entry:'ARP/ND — oracle neighbor',
+  next_hop_group_member:'ECMP members',
+  my_sid_entry:'SRv6 SIDs',
+};
+const saiObjectOptions = () => [
+  {group:'Common', items:SAI_COMMON},
+  {group:`Everything else (${SAI_OBJECTS.length-SAI_COMMON.length})`,
+   items:SAI_OBJECTS.filter(t=>!SAI_COMMON.includes(t))},
+];
+/* Statuses an injected fault actually wants to return. SAI_STATUS_SUCCESS is deliberately
+   absent from both groups: the plugin refuses it, since returning success without calling
+   through is what drop=true is for. */
+const SAI_STATUS_COMMON = ['SAI_STATUS_FAILURE','SAI_STATUS_NOT_SUPPORTED','SAI_STATUS_INSUFFICIENT_RESOURCES',
+  'SAI_STATUS_ITEM_ALREADY_EXISTS','SAI_STATUS_ITEM_NOT_FOUND','SAI_STATUS_TABLE_FULL',
+  'SAI_STATUS_OBJECT_IN_USE','SAI_STATUS_NOT_EXECUTED'];
+const saiStatusOptions = () => [
+  {group:'No status — let the call through', items:['']},
+  {group:'Common', items:SAI_STATUS_COMMON},
+  {group:'Everything else',
+   items:SAI_STATUSES.filter(x=>x&&x!=='SAI_STATUS_SUCCESS'&&!SAI_STATUS_COMMON.includes(x))},
+];
+/* What a dropped op leaves unwritten, or '' when dropping it is safe. */
+function saiUndroppable(t,op){
+  if(op==='remove'||op==='set')return '';
+  if(op==='create')return SAI_ENTRY.has(t)?'':'the new object id';
+  if(op==='get')return 'the attribute list';
+  if(op==='bulk_create')return 'the object ids and the per-object status array';
+  if(op==='bulk_remove')return 'the per-object status array';
+  return 'the outputs of the get and create it also covers';
+}
+/* Mirrors sai._returns_bulk_statuses: a status or drop fault on a bulk call leaves the per-object
+   status array as syncd zero-filled it, which reads as all-SUCCESS. op=all includes bulk ops. */
+function saiBulkStatuses(t,op){
+  return op==='bulk_create'||op==='bulk_remove'||(op==='all'&&SAI_BULK.has(t));
+}
+const SAI_STATUSES = ["", "SAI_STATUS_ADDR_NOT_FOUND", "SAI_STATUS_ATTR_NOT_IMPLEMENTED_0", "SAI_STATUS_ATTR_NOT_IMPLEMENTED_MAX", "SAI_STATUS_ATTR_NOT_SUPPORTED_0", "SAI_STATUS_ATTR_NOT_SUPPORTED_MAX", "SAI_STATUS_BUFFER_OVERFLOW", "SAI_STATUS_FAILURE", "SAI_STATUS_INSUFFICIENT_RESOURCES", "SAI_STATUS_INVALID_ATTRIBUTE_0", "SAI_STATUS_INVALID_ATTRIBUTE_MAX", "SAI_STATUS_INVALID_ATTR_VALUE_0", "SAI_STATUS_INVALID_ATTR_VALUE_MAX", "SAI_STATUS_INVALID_NV_STORAGE", "SAI_STATUS_INVALID_OBJECT_ID", "SAI_STATUS_INVALID_OBJECT_TYPE", "SAI_STATUS_INVALID_PARAMETER", "SAI_STATUS_INVALID_PORT_MEMBER", "SAI_STATUS_INVALID_PORT_NUMBER", "SAI_STATUS_INVALID_VLAN_ID", "SAI_STATUS_ITEM_ALREADY_EXISTS", "SAI_STATUS_ITEM_NOT_FOUND", "SAI_STATUS_MANDATORY_ATTRIBUTE_MISSING", "SAI_STATUS_NOT_EXECUTED", "SAI_STATUS_NOT_IMPLEMENTED", "SAI_STATUS_NOT_SUPPORTED", "SAI_STATUS_NO_MEMORY", "SAI_STATUS_NV_STORAGE_FULL", "SAI_STATUS_OBJECT_IN_USE", "SAI_STATUS_STAGE_MISMATCH", "SAI_STATUS_SW_UPGRADE_VERSION_MISMATCH", "SAI_STATUS_TABLE_FULL", "SAI_STATUS_UNINITIALIZED", "SAI_STATUS_UNKNOWN_ATTRIBUTE_0", "SAI_STATUS_UNKNOWN_ATTRIBUTE_MAX"];
+
+/* One entry per condition the plugin can impose on the switch. Every field mirrors the
+   injector's positional/defaults/validate() in the plugin; `desc` is one line under the
+   control saying what the knob does. */
+const INJECTORS = {
+  kill:{title:'kill',short:'restart or crash a daemon',event:true,positional:['process'],
+    summary:'Stop or restart a daemon or container and see whether it comes back consistent.',
+    example:'kill=orchagent:how=restart',
+    fields:[
+      {k:'process',type:'target',label:'Target',def:'orchagent',
+        desc:'A process is signalled inside its container. A container is restarted whole, taking every daemon in it with it.'},
+      {k:'how',type:'select',label:'How',options:['sigkill','restart','container'],def:'sigkill',
+        desc:'sigkill sends signal 9 to the daemon, restart runs supervisorctl restart inside its container, container runs docker restart.'},
+      {k:'signal',type:'int',label:'Signal',def:9,min:1,max:64,show:p=>p.how==='sigkill',
+        desc:'Signal number: 9 kills without cleanup, 15 asks for a clean shutdown.'},
+      {k:'settle',type:'int',label:'Settle',unit:'s',def:20,min:0,max:900,
+        desc:'Seconds to wait after the kill before the invariants are checked; syncd on real hardware can need minutes.'},
+      {k:'force',type:'bool',label:'force=true',def:false,show:p=>isProtected(p.process),
+        desc:'Acknowledge that this target is protected and killing it cascades across the box.'},
+    ]},
+  pause:{title:'pause',short:'freeze it, then thaw',positional:['process','seconds'],
+    summary:'Freeze a daemon or container for a fixed time, then thaw it.',
+    example:'pause=orchagent:10',
+    fields:[
+      {k:'process',type:'target',label:'Target',def:'orchagent',
+        desc:'A process is SIGSTOPped on its own. A container is docker paused, freezing every process in it at once. The mechanism follows from the target.'},
+      {k:'seconds',type:'range',label:'Freeze',unit:'s',def:10,min:1,max:300,
+        desc:'How long it stays frozen; a dead-man timer on the switch thaws it even if the harness dies.'},
+      /* Not a control: a daemon can only be SIGSTOPped and a container can only be docker
+         paused, so asking produced a fourth of the answers the validator then refused. */
+      {k:'how',def:'signal',derived:p=>isContainer(p.process)?'docker':'signal'},
+      {k:'force',type:'bool',label:'force=true',def:false,show:p=>isProtected(p.process),
+        desc:'Acknowledge that this target is protected.'},
+    ]},
+  redis:{title:'redis',short:'cut a daemon’s redis link',positional:['action','target'],
+    summary:'Cut one daemon’s redis connections, or stall the redis server for a moment.',
+    example:'redis=client_kill:orchagent',
+    fields:[
+      {k:'action',type:'select',label:'Action',options:['client_kill','sleep'],def:'client_kill',
+        desc:'client_kill severs one daemon’s connections; sleep blocks the whole redis server.'},
+      {k:'target',type:'target',label:'Consumer to sever',def:'orchagent',show:p=>p.action==='client_kill',
+        desc:'The daemon whose redis connections are cut.'},
+      {k:'target',type:'range',label:'Sleep',unit:'ms',def:2000,min:1,max:10000,step:50,show:p=>p.action==='sleep',id:'target_ms',
+        desc:'How long redis blocks; capped at 10 s so supervisor does not restart containers.'},
+      {k:'db',type:'select',label:'Database',options:['APPL_DB','CONFIG_DB','STATE_DB','ASIC_DB','COUNTERS_DB'],def:'APPL_DB',
+        desc:'Which database the command is addressed to.'},
+      {k:'force',type:'bool',label:'force=true',def:false,show:p=>p.action==='client_kill'&&isProtected(p.target),
+        desc:'Acknowledge that this target is protected.'},
+    ]},
+  corrupt:{title:'corrupt',short:'write a bad value into a table',positional:['db','key'],
+    summary:'Overwrite or delete one database entry, restored exactly on release.',
+    example:'corrupt=APPL_DB:[LAG_MEMBER_TABLE:PortChannel12:Ethernet48]:status=garbage',
+    fields:[
+      {k:'db',type:'select',label:'Database',options:['APPL_DB','CONFIG_DB','STATE_DB','ASIC_DB','COUNTERS_DB'],def:'APPL_DB',
+        desc:'Which database holds the key; ASIC_DB and COUNTERS_DB bypass their owning daemon and need force.'},
+      {k:'key',type:'text',label:'Key',def:'LAG_MEMBER_TABLE:PortChannel12:Ethernet48',wide:true,
+        desc:'The full redis key; colons are fine, APPL_DB uses ":" and CONFIG_DB uses "|" as separator.'},
+      {k:'fields',type:'text',label:'Field overwrites',def:'status=garbage',wide:true,special:'fields',
+        desc:'Comma-separated field=value pairs written into the hash.'},
+      {k:'delete',type:'bool',label:'delete=true \u00b7 remove the key',def:false,
+        desc:'Delete the whole key instead of overwriting fields.'},
+      {k:'force',type:'bool',label:'force=true',def:false,show:p=>['ASIC_DB','COUNTERS_DB'].includes(p.db),
+        desc:'Acknowledge a write that nothing will reconcile and that may wedge syncd.'},
+    ]},
+  mem:{title:'mem',short:'cap its memory',positional:['process','share'],
+    summary:'Put a memory ceiling on a container, fixed or ramped down, and report whether it recovered on release.',
+    example:'mem=swss:90',
+    fields:[
+      {k:'process',type:'target',label:'Target',def:'swss',
+        desc:'Memory pressure is container-wide, so naming a process caps the container it lives in.'},
+      {k:'share',type:'range',label:'Ceiling \u00b7 % of current RSS',unit:'%',def:90,plugDef:70,min:5,max:100,
+        hint:'a percentage of what the container is using RIGHT NOW, not of the box',
+        desc:'The cap as a percentage of the container\u2019s live RSS. 90 proves the mechanism and leaves the daemon alive. Below about 60 it is killed rather than slowed: 40% of a 131 MB swss was a 52 MB ceiling, and swss died and took syncd with it.'},
+      {k:'ramp',type:'int',label:'Ramp',unit:'% steps',def:0,min:0,max:50,
+        desc:'Step the ceiling down from 100% to share in steps of this size, one every period; 0 applies share at once.'},
+      {k:'period',type:'int',label:'Period',unit:'s',def:30,min:1,max:600,show:p=>+p.ramp>0,
+        desc:'Seconds between ramp steps.'},
+      {k:'ttl',type:'int',label:'TTL dead-man',unit:'s',def:900,min:30,max:7200,
+        desc:'The agent on the switch lifts the ceiling after this many seconds no matter what.'},
+      {k:'interval',type:'int',label:'Sample interval',unit:'s',def:5,min:1,max:60,
+        desc:'How often the agent samples RSS and OOM kills under the cap.'},
+      {k:'settle',type:'int',label:'Settle after release',unit:'s',def:5,min:0,max:120,
+        desc:'Seconds to wait after lifting the ceiling before RSS is re-read for the recovery verdict.'},
+      {k:'force',type:'bool',label:'force=true',def:false,show:p=>isProtected(p.process),
+        desc:'Acknowledge that this target is protected.'},
+    ]},
+  cpu:{title:'cpu',short:'starve it of CPU',positional:['process','share'],
+    summary:'Cap how much CPU a daemon or container may use.',
+    example:'cpu=orchagent:30',
+    fields:[
+      {k:'process',type:'target',label:'Target',def:'orchagent',
+        desc:'A process gets its own cgroup under cpu.max. A container is throttled as a whole with docker update.'},
+      {k:'share',type:'range',label:'Share of one core',unit:'%',def:30,min:1,max:100,
+        desc:'The hard ceiling as a share of one core; it only bites while the target is busy.'},
+      {k:'mode',type:'select',label:'Mode',options:['budget'],def:'budget',
+        desc:'budget is a ceiling. contend and load \u2014 making the daemon actually spend \u2014 were cut from this injector; hog= is the one that does that.'},
+      {k:'how',type:'select',label:'Tier',options:['auto','docker','cgroup'],def:'auto',
+        desc:'auto picks cgroup for a daemon and docker for a container; the others force one mechanism.'},
+      {k:'settle',type:'int',label:'Hold the fault for',unit:'s',def:20,plugDef:20,min:0,max:7200,
+        desc:'How long the cap is held before the check reads the switch.'},
+      {k:'ttl',type:'int',label:'Safety net if the harness dies',unit:'s',def:900,min:30,max:7200,
+        desc:'The agent on the switch removes the cap after this many seconds no matter what. Not the hold time.'},
+      {k:'interval',type:'int',label:'Sample interval',unit:'s',def:5,min:1,max:60,
+        desc:'How often the agent measures the achieved share and re-attaches a restarted daemon.'},
+      {k:'force',type:'bool',label:'force=true',def:false,show:p=>isProtected(p.process),
+        desc:'Acknowledge that this target is protected.'},
+    ]},
+  hog:{title:'hog',short:'spend its CPU, not just cap it',positional:['process','cpu'],
+    summary:'Hold a container at a CPU percentage it actually reaches, and a memory ceiling it is actually touching.',
+    example:'hog=swss:cpu=40',
+    fields:[
+      {k:'process',type:'target',label:'Target',def:'swss',
+        desc:'A process name resolves to the container it lives in, and the container is what gets hogged \u2014 that is the budget the kernel enforces.'},
+      {k:'cpu',type:'range',label:'CPU held',unit:'%',def:40,plugDef:0,min:0,max:100,
+        hint:'a cap only bites while the target is busy; this is bounded AND spent, so docker stats really reads it',
+        desc:'Share of the budget below that is bounded with cpu.max and then spent by a load inside the container. 0 leaves CPU alone.'},
+      {k:'cores',type:'int',label:'Budget',unit:'cores',def:1,min:1,max:16,
+        desc:'How big the budget is; the percentage above is taken of these, so 40% of 2 cores is 80% of one core.'},
+      {k:'mem',type:'range',label:'Memory held',unit:'%',def:0,min:0,max:80,
+        desc:'A balloon inside the container holds this much on top of what it already uses, under memory.high so it is throttled rather than OOM-killed. 0 leaves memory alone.'},
+      {k:'settle',type:'int',label:'Hold the fault for',unit:'s',def:20,plugDef:20,min:0,max:7200,
+        desc:'How long the load is held before the check reads the switch.'},
+      {k:'ttl',type:'int',label:'Safety net if the harness dies',unit:'s',def:900,min:30,max:7200,
+        desc:'The switch kills the load and restores both knobs after this many seconds no matter what. Not the hold time.'},
+      {k:'force',type:'bool',label:'force=true',def:false,show:p=>isProtected(p.process),
+        desc:'Acknowledge that this target is protected.'},
+    ]},
+  sai:{title:'sai',short:'delay or fail ASIC calls',positional:['object_type','op'],
+    summary:'Delay, fail, or drop chosen SAI calls between syncd and the ASIC.',
+    example:'sai=vlan_member:remove:status=SAI_STATUS_ITEM_NOT_FOUND:count=1',
+    fields:[
+      {k:'mode',type:'select',label:'What the fault does',options:['intercept','freeze'],def:'intercept',hint:'intercept: delay, fail or drop the calls you name. freeze: stop syncd so every call blocks (no build, no restart)',
+        desc:'intercept delays, fails or drops the calls you name. freeze SIGSTOPs syncd so every call blocks at once.'},
+      {k:'object_type',type:'select',label:'Object type',options:saiObjectOptions,def:'route_entry',hint2:p=>SAI_COMMON_WHY[p.object_type]||'',show:p=>p.mode==='intercept',
+        desc:'Which SAI object type’s calls are intercepted.'},
+      {k:'op',type:'select',label:'Operation',options:p=>saiOpsFor(p.object_type),def:'create',show:p=>p.mode==='intercept',
+        desc:'Which operation on that object type is intercepted.'},
+      {k:'delay',type:'range',label:'Delay',unit:'ms',def:2000,plugDef:0,min:0,max:300000,step:100,show:p=>p.mode==='intercept',
+        desc:'Milliseconds each matching call sleeps before proceeding; 0 = none.'},
+      {k:'status',type:'select',label:'Return status',options:saiStatusOptions,def:'',show:p=>p.mode==='intercept',
+        desc:'Return this SAI status instead of running the call; none lets it through.'},
+      {k:'count',type:'int',label:'Fire count',def:0,min:0,max:100000,hint:'0 = every matching call; 1 = once (the stale-member shape)',show:p=>p.mode==='intercept',
+        desc:'How many matching calls are affected before the fault disarms itself; 0 = all.'},
+      {k:'drop',type:'bool',label:'drop=true · never call through',def:false,show:p=>p.mode==='intercept'&&!saiUndroppable(p.object_type,p.op),
+        desc:'Return SUCCESS without touching the ASIC, so the switch believes it worked.'},
+      {k:'settle',type:'int',label:'Hold the fault for',unit:'s',def:20,plugDef:20,min:0,max:7200,
+        hint:'how long it stays armed before the invariants are read and it is released',
+        desc:'An intercept does nothing until a matching call arrives, so this is the window you have to make that call happen — by hand, or from traffic. Raise it if you are driving the switch yourself.'},
+      {k:'ttl',type:'int',label:'Safety net if the harness dies',unit:'s',def:600,plugDef:600,min:0,max:7200,
+        hint:'not the hold time — that is the field above',
+        desc:'A timer armed on the switch itself that lifts the fault if this console never comes back: a crash, a dropped connection, a closed laptop. On a normal run it is cancelled the moment the fault is released, so it does nothing. It only has to outlast the hold.'},
+    ]},
+  spin:{title:'spin',short:'burn its CPU',positional:['process','percent'],
+    summary:'Drive a process to the CPU level you set, and see how the switch behaves while it is stuck there.',
+    example:'spin=orchagent:95',
+    fields:[
+      {k:'process',type:'target',label:'Process',def:'orchagent',
+        only:['orchagent','vlanmgrd','portsyncd'],
+        hint:'more processes coming soon',
+        desc:'Which process to spin. orchagent handles routes, ports, neighbours and FDB on one thread, so all of them stall together.'},
+      {k:'percent',type:'range',label:'CPU to burn',unit:'%',def:95,min:1,max:100,
+        hint:'100% means it does nothing at all',
+        desc:'How much CPU the process burns spinning instead of working.'},
+      {k:'settle',type:'int',label:'Hold the fault for',unit:'s',def:20,plugDef:20,min:0,max:3600,
+        desc:'How long the spin is held before the check reads the switch.'},
+      {k:'ttl',type:'int',label:'Safety net if the harness dies',unit:'s',def:300,min:30,max:3600,
+        desc:'The switch lifts the fault after this many seconds no matter what. Not the hold time.'},
+      {k:'force',type:'bool',label:'force=true',def:false,show:p=>isProtected(p.process),
+        desc:'Acknowledge that this target is protected.'},
+    ]},
+  exhaust:{title:'exhaust',short:'fill a hardware table',positional:['table','count'],
+    summary:'Fill a hardware table past its limit, scale back, and check nothing leaked.',
+    example:'exhaust=route:120000',
+    fields:[
+      {k:'table',type:'select',label:'Table',options:CRM,def:'route',
+        hint:'nhg is the only table small enough to really fill \u2014 1024 entries, vs millions for routes',
+        desc:'Which resource to overfill, by its CRM name. Fills with blackhole static routes, then checks CRM returns to baseline on release \u2014 a permanent delta is a leak.'},
+      {k:'count',type:'int',label:'Count',def:0,min:0,max:4000000,
+        desc:'How many entries to push; 0 derives it from the CRM limit and the reach below.'},
+      {k:'over_pct',type:'range',label:'Reach · % of limit',unit:'%',def:110,min:100,max:200,
+        desc:'How far past the CRM limit to go, as a percentage of it.'},
+      {k:'settle',type:'int',label:'Settle',unit:'s',def:60,min:0,max:900,
+        desc:'Seconds to wait after scaling back before CRM counters are compared with the baseline.'},
+    ]},
+  storm:{title:'storm',short:'flap a LAG to flood netlink',positional:['kind','rate'],
+    summary:'Flap a LAG member fast enough to flood netlink, then check what did not come back — new ENOBUFS, and neighbours that never re-resolved. Only netlink runs; arp/nd/mac need a PTF peer the plugin has no handle on and are refused at apply time.',
+    example:'storm=netlink:rate=1000:seconds=25',
+    fields:[
+      {k:'kind',type:'select',label:'Kind',options:['netlink','arp','nd','mac'],def:'netlink',
+        hint:'only netlink is implemented — arp/nd/mac are refused at apply time',
+        desc:'arp / nd flood neighbour learning and mac is a MAC-move storm, all three sent from the PTF. netlink is driven on the switch and needs no PTF.'},
+      {k:'how',type:'select',label:'Netlink mechanism',options:['lag','link','neigh'],def:'lag',
+        show:p=>p.kind==='netlink',
+        desc:'lag flaps a PortChannel member (the netlink-flood shape) and needs a LAG; link flaps a routed front-panel port that is not in one; neigh churns scratch 169.254 neighbours, which the switch ignores as off-link, so it is netlink pressure with no dataplane change. Only lag needs a LAG.'},
+      {k:'rate',type:'range',label:'Rate',unit:'/s',def:5000,min:1,max:200000,step:100,
+        desc:'What it counts follows the kind: packets/s from the PTF for arp/nd/mac, port flaps/s for netlink how=lag or link (capped at 200 — above that the driver never finishes and the port stays down), neighbour writes/s for how=neigh. Leave it off the spec entirely and the plugin picks the right default for the mechanism: 5000, 20, 20000.'},
+      {k:'seconds',type:'range',label:'Duration',unit:'s',def:30,min:1,max:600,
+        desc:'How long the storm runs before stopping on its own.'},
+      {k:'count',type:'int',label:'Distinct entries',def:1000,min:1,max:1000000,
+        desc:'How many distinct addresses the storm cycles through; for how=neigh this is also the size of one ip -batch pass.'},
+      {k:'port',type:'text',label:'Ingress port',def:'',show:p=>p.kind!=='netlink',
+        desc:'Which PTF port the flood enters on; blank = the first one. kind=mac needs two, comma-separated.'},
+      {k:'port',type:'text',label:'Switch interface',def:'',show:p=>p.kind==='netlink',
+        desc:'Which interface on the switch to churn; blank = the first that fits the mechanism.'},
+    ]},
+  syslog:{title:'syslog',short:'bury the logs under load',positional:['rate','seconds'],
+    summary:'Flood the logging path every daemon and health check shares.',
+    example:'syslog=5000:seconds=30:severity=crit',
+    fields:[
+      {k:'rate',type:'range',label:'Rate',unit:'lines/s',def:1000,min:1,max:100000,step:100,
+        desc:'Lines per second; above roughly 100/s rsyslog starts discarding.'},
+      {k:'seconds',type:'range',label:'Duration',unit:'s',def:30,min:1,max:600,
+        desc:'How long the flood runs.'},
+      {k:'size',type:'int',label:'Line size',unit:'B',def:200,min:16,max:8192,
+        desc:'Bytes per line, padding included.'},
+      {k:'severity',type:'select',label:'Severity',options:['emerg','alert','crit','err','warning','notice','info','debug'],def:'notice',
+        desc:'Syslog severity on every line; decides which rsyslog rules match.'},
+      {k:'facility',type:'select',label:'Facility',options:['user','daemon','local0','local1','local2','local3','local4','local5','local6','local7'],def:'user',
+        desc:'Syslog facility on every line.'},
+      {k:'container',type:'target',label:'From container',def:'swss',containersOnly:true,
+        desc:'Which container runs the logger loop.'},
+      {k:'ident',type:'text',label:'Syslog ident (logger -t)',def:'sonic-chaos',
+        desc:'The program name stamped on every line; letters, digits, - and _.'},
+      {k:'max_disk_pct',type:'int',label:'Disk ceiling',unit:'%',def:85,min:50,max:95,
+        desc:'Refuse to start, or stop, once /var/log is fuller than this percentage.'},
+    ]},
+};
+
+/* The names are OUTPUT vocabulary, not options: a failure has to say which parity broke.
+   You pick a GROUP. crm_baseline is gone -- the plugin rejects an invariant nothing
+   implements at load time, so offering it here could only produce a config that fails. */
+const INVARIANTS = [
+  {k:'lag_member',d:'every APPL_DB LAG member is programmed in ASIC_DB, and vice versa',g:'parity'},
+  {k:'lag',d:'every APPL_DB PortChannel has an ASIC_DB LAG object, and vice versa',g:'parity'},
+  {k:'neighbor',d:'APPL_DB neighbours match ASIC_DB neighbour entries, including the MAC',g:'parity'},
+  {k:'vlan_member',d:'every APPL_DB VLAN member is programmed in ASIC_DB, and vice versa',g:'parity'},
+  {k:'route_check',d:'APPL_DB vs ASIC_DB vs FRR via route_check.py on the box',g:'parity'},
+  {k:'bgp_established',d:'every configured BGP peer is Established, read through vtysh',g:'health'},
+  {k:'critical_processes',d:'every process in a container\'s critical_processes file is RUNNING',g:'health'},
+  {k:'no_cores',d:'no core files on the box',g:'health'},
+  {k:'key_set_backlog',d:'a *_KEY_SET that stays non-empty after a settle',g:'signal'},
+];
+const GROUPS={
+  parity:'do APPL_DB, ASIC_DB and STATE_DB agree — the core consistency question',
+  health:'is the box up at all — a different question, useful as a gate',
+  signal:'is something falling behind, before anything has diverged yet',
+  all:'every check, all three groups',
+};
+const membersOf=(g)=>g==='all'?INVARIANTS.map(i=>i.k):INVARIANTS.filter(i=>i.g===g).map(i=>i.k);
+/* Emit the group word when the selection is exactly a group, else an explicit list. Keeps a
+   restored session or a demo preset honest instead of silently widening what gets checked. */
+const groupWord=(set,g)=>{const m=membersOf(g);return m.length===set.size&&m.every(k=>set.has(k))?g:null};
+
+/* Switches come from the console's api/duts only (`sonic-chaos console --dut ssh://user@host`); the
+   merge in probeBackend() fills the platform fields a source does not know. */
+const DUTS = [];
+
+/* What a fault is known to surface — the regression set from the plan. Used by the simulator only. */
+const KNOWN = [
+  {when:(f,d)=>f.name==='kill'&&f.p.process==='orchagent'&&f.p.how==='restart'&&d.cls==='hw'&&/DNX/.test(d.asic),p:.8,inv:'route_check',ticket:'finding',sev:'P1',
+    text:'isolated orchagent restart: syncd declared the ASIC view inconsistent, SIGABRT; swss did not come back inside recover_within',db:'ASIC_DB',key:'ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY:*'},
+  {when:(f,d)=>f.name==='kill'&&f.p.process==='orchagent'&&f.p.how==='restart',p:.7,inv:'route_check',ticket:'finding',sev:'P2',
+    text:'cold orchagent restart rebuilt the temp view without APPL_DB replay; APPLY_VIEW removed 14 routes the ASIC should have kept',db:'APPL_DB/ASIC_DB',key:'ROUTE_TABLE:10.0.0.0/24 (+13)'},
+  {when:(f,d)=>f.name==='kill'&&f.p.process==='orchagent'&&f.p.how==='sigkill',p:.35,inv:'route_check',ticket:'finding',sev:'P2',
+    text:'no deterministic reconcile after crash: APPL_DB and ASIC_DB drifted by 3 routes and 1 LAG member',db:'APPL_DB/ASIC_DB',key:'LAG_MEMBER_TABLE:PortChannel0001:Ethernet4'},
+  {when:(f,d)=>f.name==='kill'&&f.p.process==='swss'&&f.p.how==='container',p:.3,inv:'route_check',ticket:'finding',sev:'P2',
+    text:'static SRv6 MY_SID left un-offloaded after swss restart; no self-recovery',db:'ASIC_DB',key:'SRV6_MY_SID_TABLE:fcbb:bbbb:1::'},
+  {when:(f,d)=>f.name==='kill'&&f.p.process==='bgpd',p:.75,inv:'route_check',ticket:'finding',sev:'P2',
+    text:'local bgpd restart flushed the ASIC FIB: ASIC route count dropped 5314 → 212 on a control-plane-only restart',db:'ASIC_DB',key:'SAI_OBJECT_TYPE_ROUTE_ENTRY count'},
+  {when:(f,d)=>f.name==='redis'&&f.p.action==='client_kill'&&f.p.target==='orchagent',p:.45,inv:'key_set_backlog',ticket:'finding',sev:'P2',
+    text:'ConsumerStateTable reconnected without replay; 27 keys written during the gap never reached ASIC_DB',db:'APPL_DB',key:'ROUTE_TABLE_KEY_SET · 27 pending'},
+  {when:(f,d)=>f.name==='pause'&&f.p.process==='orchagent'&&+f.p.seconds>=30,p:.4,inv:'key_set_backlog',ticket:'finding',sev:'P3',
+    text:'backlog did not drain inside recover_within: NEIGH_TABLE_KEY_SET still 9 pending, wpa_cli 10 s timeout in syslog',db:'APPL_DB',key:'NEIGH_TABLE_KEY_SET'},
+  {when:(f,d)=>f.name==='pause'&&f.p.process==='syncd',p:.6,inv:'route_check',ticket:'finding',sev:'P1',
+    text:'every SAI call blocked past the 60 s sairedis timeout; orchagent aborted and the box needed config reload',db:'ASIC_DB',key:'sairedis response timeout'},
+  {when:(f,d)=>f.name==='storm'&&f.p.kind==='netlink',p:.7,inv:'key_set_backlog',ticket:'finding',sev:'P2',
+    text:'fpmsyncd hit ENOBUFS on the netlink socket; 41 neighbours stopped resolving',db:'APPL_DB',key:'NEIGH_TABLE · 41 missing'},
+  {when:(f,d)=>f.name==='exhaust'&&['acl','mirror','nhg'].includes(f.p.table)&&d.cls==='hw',p:.75,inv:'exhaust round-trip',ticket:'finding',sev:'P2',
+    text:'used-count never returned to baseline after scaling back: a leaked object per over-limit attempt',db:'COUNTERS_DB',key:'CRM:STATS used'},
+  {when:(f,d)=>f.name==='sai'&&f.p.op==='remove'&&f.p.status==='SAI_STATUS_ITEM_NOT_FOUND'&&d.cls==='hw',p:.8,inv:'lag_member',ticket:'finding',sev:'P2',
+    text:'remove → ITEM_NOT_FOUND silently swallowed; stale ASIC_DB entry survives and re-arms the crash on next restart',db:'ASIC_DB',key:'ASIC_STATE:SAI_OBJECT_TYPE_VLAN_MEMBER:oid:0x2700000000a12'},
+  {when:(f,d)=>f.name==='cpu'&&f.p.process==='orchagent'&&+f.p.share<=30,p:.35,inv:'key_set_backlog',ticket:'finding',sev:'P3',
+    text:'under a 30% budget the LAG add path blew the wpa_cli 10 s timeout; achieved share measured 29.1%',db:'APPL_DB',key:'LAG_MEMBER_TABLE_KEY_SET'},
+];
+
+/* ─────────────────── Python-compatible random.Random ─────────────────── */
+/* MT19937 seeded exactly like CPython's random.seed(int) so the preview matches experiment.schedule(). */
+class PyRandom{
+  constructor(seed){this.mt=new Uint32Array(624);this.i=625;this.seedInt(seed)}
+  initGenrand(s){const mt=this.mt;mt[0]=s>>>0;for(let i=1;i<624;i++){const p=mt[i-1]^(mt[i-1]>>>30);mt[i]=(Math.imul(1812433253,p)+i)>>>0}this.i=624}
+  initByArray(key){this.initGenrand(19650218);const mt=this.mt;let i=1,j=0;const n=key.length;
+    for(let k=Math.max(624,n);k;k--){const p=mt[i-1]^(mt[i-1]>>>30);mt[i]=((mt[i]^Math.imul(p,1664525))+key[j]+j)>>>0;i++;j++;if(i>=624){mt[0]=mt[623];i=1}if(j>=n)j=0}
+    for(let k=623;k;k--){const p=mt[i-1]^(mt[i-1]>>>30);mt[i]=((mt[i]^Math.imul(p,1566083941))-i)>>>0;i++;if(i>=624){mt[0]=mt[623];i=1}}
+    mt[0]=0x80000000;this.i=624}
+  seedInt(seed){let n=BigInt(Math.abs(Math.trunc(seed)||0));const key=[];if(n===0n)key.push(0);while(n>0n){key.push(Number(n&0xffffffffn));n>>=32n}this.initByArray(key)}
+  genrand(){const mt=this.mt;if(this.i>=624){for(let k=0;k<624;k++){const y=(mt[k]&0x80000000)|(mt[(k+1)%624]&0x7fffffff);mt[k]=mt[(k+397)%624]^(y>>>1)^((y&1)?0x9908b0df:0)}this.i=0}
+    let y=mt[this.i++];y^=y>>>11;y^=(y<<7)&0x9d2c5680;y^=(y<<15)&0xefc60000;y^=y>>>18;return y>>>0}
+  getrandbits(k){return k===0?0:this.genrand()>>>(32-k)}
+  randbelow(n){const k=32-Math.clz32(n);let r=this.getrandbits(k);while(r>=n)r=this.getrandbits(k);return r}
+  choice(a){return a[this.randbelow(a.length)]}
+  shuffle(a){for(let i=a.length-1;i>0;i--){const j=this.randbelow(i+1);const t=a[i];a[i]=a[j];a[j]=t}return a}
+  random(){const a=this.genrand()>>>5,b=this.genrand()>>>6;return (a*67108864+b)/9007199254740992}
+}
+
+
+
+/* ───────────────────────────── state ───────────────────────────── */
+const $=(id)=>document.getElementById(id);
+const state={
+  dut:'', editing:'kill', editParams:{}, pool:[],
+  steadyGroup:'parity', invGroup:'parity',
+  steady:new Set(membersOf('parity')),
+  inv:new Set(membersOf('parity')),
+  mode:'file', preset:'standalone', baseline:true, step:1, run:null,
+};
+
+const isProtected=(t)=>TARGETS.protected.includes(t);
+const isContainer=(t)=>TARGETS.containers.includes(t)&&!TARGETS.processes[t];
+const UNKNOWN_DUT=(host)=>({host,hwsku:'unknown platform',cls:'hw',asic:'—',image:'—',topo:'—',os:'—',recover:'240s',
+  recovery:'not in the platform table -- budgets are defaults; measure the noise floor with scripts/noise.py before trusting a result',known:false});
+const dutOf=()=>DUTS.find(d=>d.host===state.dut)||UNKNOWN_DUT(state.dut||'');
+
+function defaults(name){const o={};for(const f of INJECTORS[name].fields){if(f.id==='target_ms'||f.derived)continue;o[f.k]=f.def}return o}
+function saveLocal(){try{localStorage.setItem('sonic-chaos-console',JSON.stringify({
+  dut:state.dut,pool:state.pool,steady:[...state.steady],inv:[...state.inv],steadyGroup:state.steadyGroup,invGroup:state.invGroup,mode:state.mode,preset:state.preset,baseline:state.baseline,repeat:state.repeat,
+  form:{recoverWithin:$('recoverWithin').value,duration:$('duration').value,minGap:$('minGap').value,seed:$('seed').value,expName:$('expName').value,tests:$('tests').value,dryRun:$('dryRun').checked}
+}))}catch(e){}}
+function loadLocal(){try{const s=JSON.parse(localStorage.getItem('sonic-chaos-console')||'null');if(!s)return false;
+  state.dut=s.dut||state.dut;state.pool=(s.pool||[]).filter(x=>INJECTORS[x.name]).map(({tag,weight,...x})=>x);state.steadyGroup=GROUPS[s.steadyGroup]?s.steadyGroup:'parity';state.invGroup=GROUPS[s.invGroup]?s.invGroup:'parity';state.steady=new Set(s.steady&&s.steady.length?s.steady:membersOf(state.steadyGroup));state.inv=new Set(s.inv&&s.inv.length?s.inv:membersOf(state.invGroup));state.mode=s.mode||'file';state.preset=Object.hasOwn(PRESETS,s.preset||'')?s.preset:'standalone';state.baseline=s.baseline!==false;state.repeat=s.repeat||1;state.step=(+s.step===2)?2:1;
+  const f=s.form||{};for(const k of ['recoverWithin','duration','minGap','seed','expName','tests'])if(f[k]!==undefined)$(k).value=f[k];$('dryRun').checked=!!f.dryRun;return true}catch(e){return false}}
+
+/* The console runs one of two runners and builds the argv itself; the page only shows the equivalent
+   command. api/health says which of them can start on the machine serving the console. */
+const PRESETS={
+  standalone:{label:'sonic-chaos run',
+    why:'Uses the plugin\'s injectors, consistency checks and seeded schedule directly against the switch. Needs no sonic-mgmt testbed definition. Does not run the pytest suite, so a verdict flip is an invariant divergence, not a test failure.'},
+  'sonic-mgmt':{label:'pytest in sonic-mgmt',
+    why:'The sonic-mgmt suite under fault, run in the checkout the console was started with (--sonic-mgmt). Needs the switch defined in ansible/inventory and ansible/testbed.yaml under its name.'},
+};
+/* ───────────────────────────── spec building ───────────────────────────── */
+const SAI_MODE_OLD={intercept:'shim',freeze:'sigstop'};
+function emitValue(name,k,v){
+  if(name!=='sai'||k!=='mode')return v;
+  const modes=backend.agent&&backend.agent.injectors&&backend.agent.injectors.sai
+    &&backend.agent.injectors.sai.choices&&backend.agent.injectors.sai.choices.MODES;
+  if(modes&&!modes.includes(v)&&SAI_MODE_OLD[v]&&modes.includes(SAI_MODE_OLD[v]))return SAI_MODE_OLD[v];
+  return v;
+}
+function specOf(name,p){
+  const inj=INJECTORS[name];const parts=[];
+  const pos=inj.positional.map(k=>p[k]);
+  if(name==='sai'&&p.mode==='freeze'){parts.push('all','all')}
+  else{for(const v of pos){if(v===undefined||v===''||v===null)break;parts.push(String(v))}}
+  for(const f of inj.fields){
+    if(inj.positional.includes(f.k))continue;
+    if(f.show&&!f.show(p))continue;
+    const v=f.derived?f.derived(p):p[f.k];
+    if(f.type==='bool'){if(v)parts.push(f.k+'=true');continue}
+    if(v===undefined||v===null||v==='')continue;
+    /* Omit only when the plugin would assume this exact value anyway. f.def is where the
+       control starts, which is not the same thing: sai delay starts at 2000 but the plugin
+       defaults to 0, so omitting it there emitted a spec the plugin rejects outright. */
+    if(String(v)===String(f.plugDef!==undefined?f.plugDef:f.def))continue;
+    parts.push(f.k+'='+emitValue(name,f.k,v));
+  }
+  return name+'='+parts.join(':');
+}
+const RESERVED_YAML_KEYS=['weight'];   // experiment.py pops this; it rejects a collision outright
+function yamlParams(name,p){
+  const inj=INJECTORS[name];const o={};
+  for(const f of inj.fields){
+    if(f.show&&!f.show(p))continue;
+    if(RESERVED_YAML_KEYS.includes(f.k))continue;   // would collide with the schema's own key
+    const v=f.derived?f.derived(p):p[f.k];
+    if(f.type==='bool'){if(v)o[f.k]=true;continue}
+    if(v===undefined||v===null||v==='')continue;
+    /* Same rule as specOf: omit only what the plugin assumes anyway. f.def is where the
+       control starts, which is not the same thing -- sai delay starts at 2000 while the
+       plugin defaults to 0, and omitting it there wrote a file the plugin rejects with
+       "sai: nothing to inject". */
+    if(!inj.positional.includes(f.k)&&String(v)===String(f.plugDef!==undefined?f.plugDef:f.def))continue;
+    o[f.k]=emitValue(name,f.k,v);
+  }
+  return o;
+}
+/* Mirrors validate() in each injector. Returns an error string or ''. */
+function validate(name,p,dut){
+  const inj=INJECTORS[name];
+  const num=(k,lo,hi,label)=>{const v=p[k];if(v===''||v===undefined||!/^-?\d+$/.test(String(v)))return `${name}: ${label||k} must be an integer, got ${JSON.stringify(v)}`;const n=+v;if(lo!==undefined&&(n<lo||n>hi))return `${name}: ${label||k} must be ${lo}..${hi}, got ${n}`;return ''};
+  const target=(t,what)=>{if(!t)return `${name}: needs a process or container, e.g. ${inj.example}`;if(!TARGET_OPTIONS.includes(t))return `${name}: unknown target '${t}'; add it to targets.yml`;if(isProtected(t)&&!p.force)return `${name}: '${t}' is protected — it cascades with no clean recovery path. Pass force=true if you mean it.`;return ''};
+  // A capability the plugin says is unavailable is an error here, not a surprise 15 minutes in.
+  for(const f of inj.fields){
+    const v=p[f.k];
+    if(v!==undefined&&v!==''&&capBad(name,f.k,v))
+      return `${name}: ${f.k}=${v} will be refused on this platform — ${capWhy(name,f.k,v)}`;
+  }
+  let e='';
+  switch(name){
+    case 'kill': e=target(p.process)||num('settle');
+      if(!e&&isContainer(p.process)&&p.how!=='container')e=`kill: how=${p.how} acts on a daemon, but ${p.process} is a container. Use how=container, or pick a process.`;
+      if(!e&&!isContainer(p.process)&&p.how==='container')e=`kill: how=container restarts a whole container, but ${p.process} is a daemon. Pick the container, or another how.`;
+      break;
+    case 'pause': e=target(p.process)||num('seconds',1,300);break;
+    case 'redis': if(p.action==='client_kill')e=target(p.target);else e=num('target',1,10000,'sleep (ms)');break;
+    case 'cpu': e=target(p.process)||num('share',1,100)||num('ttl',30,7200)||num('interval',1,60);break;
+    case 'sai': if(p.mode==='freeze'){e=num('ttl',0,7200);break}
+      if(!p.object_type)e='sai: needs an object type';else if(!SAI_OBJECTS.includes(p.object_type))e=`sai: unknown object type '${p.object_type}'`;
+      else if(p.status&&!SAI_STATUSES.includes(p.status))e=`sai: '${p.status}' is not a SAI status`;
+      else if(p.status==='SAI_STATUS_SUCCESS')e='sai: status=SAI_STATUS_SUCCESS injects nothing; use drop=true to skip the call while still reporting success';
+      else if(['bulk_create','bulk_remove'].includes(p.op)&&!SAI_BULK.has(p.object_type))e=`sai: ${p.object_type} has no bulk API, so ${p.op} would hook nothing and the fault would silently never fire. Use create or remove, or pick a type that has bulk.`;
+      else if(p.status&&saiBulkStatuses(p.object_type,p.op))e=`sai: status=${p.status} on ${p.object_type} ${p.op} returns the error without calling the ASIC, so the per-object status array is never written. syncd zero-fills it and zero is SUCCESS, so it records every object as created and the run reports a consistent box that was never under fault. Use delay= on the bulk op, or status= on a single create/remove.`;
+      else if(p.drop&&saiUndroppable(p.object_type,p.op))e=`sai: drop returns SUCCESS without calling the ASIC, so ${p.op} would leave ${saiUndroppable(p.object_type,p.op)} never written and syncd would read uninitialised memory. ${saiBulkStatuses(p.object_type,p.op)?'Use delay= instead.':'Use status=SAI_STATUS_* instead.'}`;
+      else if(!(+p.delay||p.status||p.drop))e='sai: nothing to inject; give delay=<ms>, status=<SAI_STATUS_*>, or drop=true';else e=num('delay',0,300000,'delay (ms)')||num('count',0,1e9)||num('ttl',0,7200);
+      /* The switch lifts the fault when the dead-man fires. If that happens before the check
+         reads the box, the run finds a clean switch that was never under fault and calls it a
+         pass -- the one misconfiguration here that fails quietly instead of loudly. */
+      if(!e&&+p.ttl&&+p.settle>=+p.ttl)
+        e=`sai: the fault is held for ${p.settle}s but the switch lifts it after ${p.ttl}s, so it would be gone before the check reads it and the run would pass without testing anything. Raise the safety net above the hold, or shorten the hold.`;
+      /* The dead-man is the only thing that releases a fault when a test dies, so a rule
+         that can still be spending latency after it fires disarms mid-fault. */
+      if(!e&&+p.delay&&+p.count&&+p.ttl&&(+p.delay*+p.count/1000)>+p.ttl)
+        e=`sai: ${p.count} calls delayed ${p.delay} ms each can spend ${Math.round(+p.delay*+p.count/1000)} s, longer than the ${p.ttl} s dead-man, so it would disarm mid-fault and the run would report a partial injection. Raise ttl, or lower delay or count.`;
+      break;
+    case 'exhaust': e=num('count')||num('over_pct',100,1000)||num('settle');break;
+    case 'storm': e=num('rate',1,1000000)||num('seconds',1,600)||num('count',1,1000000);
+      // Mirrors storm.validate(): a flap rate the driver cannot keep up with leaves a port down.
+      if(!e&&p.kind==='netlink'&&p.how!=='neigh'&&+p.rate>200)e=`storm: how=${p.how} flaps a port, and above 200 flaps/s the driver queues operations faster than it completes them — the port stops coming back. Use how=neigh for a high-rate netlink storm.`;
+      break;
+    case 'syslog': e=num('rate',1,100000)||num('seconds',1,600)||num('size',16,8192)||num('max_disk_pct',50,95)||(/^[A-Za-z0-9_-]+$/.test(p.ident||'')?'':`syslog: ident must be alphanumeric (plus - and _), got '${p.ident}'`);break;
+  }
+  /* settle is the hold, ttl the dead-man: a hold that outlives the net lifts the fault before the
+     check reads it. sai has its own message above; cpu/hog/spin share this one. */
+  if(!e&&['cpu','hog','spin'].includes(name)&&+p.ttl&&+p.settle>=+p.ttl)
+    e=`${name}: the fault is held for ${p.settle}s but the safety net lifts it after ${p.ttl}s, so it would be gone before the check reads it and the run would pass without testing anything. Raise the safety net above the hold, or shorten the hold.`;
+  return e;
+}
+/* Advisory only: warnings from the plan, not validator failures. */
+function warnings(name,p,dut){
+  const w=[];
+  if(state.mode==='file')for(const f of INJECTORS[name].fields){
+    if(RESERVED_YAML_KEYS.includes(f.k)&&String(p[f.k]??f.def)!==String(f.def))
+      w.push(`An experiment file reserves “${f.k}” for its own scheduling metadata, so ${name}\u2019s ${f.k} cannot be set there and falls back to ${f.def}. Switch to --chaos flags on the Launch step to use ${p[f.k]}.`);
+  }
+  if(name==='kill'&&p.how!=='container'&&(TARGETS.processes[p.process]||{}).c==='swss')w.push(`${p.process} is one of the fourteen processes swss lists as critical. Killing it does not restart the daemon in place: supervisor-proc-exit-listener tears down the WHOLE swss container, and syncd, bgp and teamd go with it. systemd allows three swss STARTS per twenty minutes — manual recoveries count — so a recovery plus two kills is the limit, and the box stays down until someone runs systemctl reset-failed swss && systemctl start swss. Measured on a lab switch, twice. Read box state before running this; it now says how many starts are left.`);
+  if(dut.cls==='hw'&&name==='kill'&&p.process==='orchagent'&&p.how==='restart')w.push('DNX hardware: orchagent may not come back on its own after a restart; have config reload or reboot written down.');
+  if(dut.cls==='hw'&&name==='kill'&&p.process==='syncd')w.push('A syncd restart re-inits the ASIC and can take minutes. Raise settle and recover_within.');
+  if(dut.cls==='hw'&&name==='sai'&&p.mode==='intercept')w.push('First arm of an object type on this box restarts swss and syncd once, so the interposer is in place when SAI initialises \u2014 budget about two minutes. Everything after that, including re-arming and disarming, is a file write picked up within 250 ms.');
+  if(name==='pause'&&p.process==='syncd'&&+p.seconds>=60)w.push('60 s is the sairedis response timeout: orchagent will abort. That may be the point.');
+  if(name==='redis'&&p.action==='sleep'&&+p.target>5000)w.push('Long DEBUG SLEEP trips supervisor health checks across every container at once.');
+  if(name==='cpu'&&p.process==='redis-server')w.push('Throttling redis restarts containers: a bricked testbed, not a finding.');
+  // share is a percentage of the container's LIVE RSS, not of the box. 40% of swss's 131 MB is
+  // ~52 MB, which killed swss and took syncd with it on a lab switch.
+  if(name==='mem'&&+p.share<60)w.push(`share is a percentage of the container's CURRENT RSS, not of the box: ${p.share}% of a container using 130 MB is a ~${Math.round(130*+p.share/100)} MB ceiling. Below about 60 the daemon is killed rather than slowed — measured, swss died at 40 and took syncd with it. Use 85–95 to prove pressure, and mean it if you go lower.`);
+  if(name==='hog'&&+p.mem>=50)w.push('A balloon at half the container\u2019s usage forces continuous reclaim, and this platform has no swap: memory.high throttles, but the daemon will crawl.');
+  if(name==='exhaust'&&+p.count===0)w.push(`count=0 derives the target from the CRM limit and fills to ${p.over_pct}% of it. On a table with millions free that is a very long run; on nexthop_group (1024 entries here) it genuinely fills the table, which is the interesting case. Read the box state first.`);
+  if(name==='exhaust'&&['neighbor','nexthop','nhg'].includes(p.table))w.push('This adds a temporary secondary subnet (10.200.0.1/16) to a routed interface so there is room for the neighbours, and removes it on release. It is the only config this injector changes.');
+  if(name==='storm'&&p.kind==='netlink'&&p.how==='lag')w.push('If the chosen PortChannel has only one member the LAG goes down for the whole run, which makes this a link-down test rather than a netlink-pressure one. The injector prefers a LAG with a spare member and says which it picked.');
+  if(dut.cls==='vs'&&name==='exhaust')w.push('CRM limits on VS are synthetic; the leak-shaped tickets need hardware.');
+  // Whether a PTF container is actually deployed is not knowable from here, only at apply time,
+  // so this is a warning rather than an error -- but it is the first thing that goes wrong on a
+  // testbed whose topology was never added, and the injector's own message is easy to miss.
+  if(name==='storm'&&p.kind!=='netlink')w.push('arp/nd/mac are generated on the PTF. A testbed whose topology was never deployed has no PTF container and the fault will refuse to run; kind=netlink needs none.');
+  if(name==='storm'&&p.kind==='netlink'&&p.how==='lag')w.push('how=lag flaps a PortChannel member and refuses on a switch with no LAG configured. how=link or how=neigh work without one.');
+  if(name==='storm'&&p.kind==='mac')w.push('A MAC-move storm alternates the same MACs between two PTF ports, so it needs two: set Ingress port to a comma-separated pair, or leave it blank to take the first two.');
+  return w;
+}
+
+function parseDur(v){const m=/^\s*(\d+)\s*([smh]?)\s*$/.exec(String(v));if(!m)return null;return +m[1]*({'':1,s:1,m:60,h:3600}[m[2]])}
+function fmtT(s){const m=Math.floor(s/60),r=s%60;return `${m}:${String(r).padStart(2,'0')}`}
+function form(){return{count:$('count').value.trim(),recover:$('recoverWithin').value.trim(),duration:$('duration').value.trim(),minGap:$('minGap').value.trim(),seed:+$('seed').value,repeat:Math.max(1,+state.repeat||1),name:$('expName').value.trim().replace(/[^a-zA-Z0-9._-]+/g,'-'),tests:$('tests').value.trim(),dry:$('dryRun').checked}}
+function yamlScalar(v){if(typeof v==='boolean')return v?'true':'false';const s=String(v);if(/^-?\d+$/.test(s))return s;if(/^[A-Za-z0-9_./:-]+$/.test(s))return s;return JSON.stringify(s)}
+function buildYaml(){
+  const f=form();const d=dutOf();
+  const lines=[`# ${f.name} · generated by the sonic-chaos console for ${d.host} (${d.hwsku})`,
+    `#   pytest ${f.tests} --chaos-file experiments/${f.name}.yml`,
+    `#   pytest ... --chaos-file experiments/${f.name}.yml --chaos-seed ${f.seed}   # replay`,
+    ``,`experiment: ${f.name}`,`seed: ${f.seed}            # same seed -> same fault order`,`duration: ${f.duration}`,`min_gap: ${f.minGap}`,
+    ...(/^\d+$/.test(f.count)?[`count: ${f.count}           # faults to schedule; omit for one per fault`]:[`# count: <n>             # omitted: each fault runs once`]),``];
+  const sw=groupWord(state.steady,state.steadyGroup);
+  if(sw)lines.push(`steady_state: ${sw}`);
+  else{lines.push('steady_state:');for(const s of state.steady)lines.push(`  - ${s}`);if(!state.steady.size)lines.push('  []   # no gate: an already-diverged box would be blamed on the first fault')}
+  lines.push('','faults:');
+  for(const x of state.pool){
+    const params=yamlParams(x.name,x.p);
+    lines.push(`  - ${x.name}:`);
+    for(const [k,v] of Object.entries(params))lines.push(`      ${k}: ${yamlScalar(v)}`);
+  }
+  if(!state.pool.length)lines.push('  []   # add at least one fault');
+  lines.push('','contract:',`  recover_within: ${f.recover}    # ${d.hwsku}: ${d.recovery.split(';')[0]}`);
+  const iw=groupWord(state.inv,state.invGroup);
+  if(iw)lines.push(`  invariants: ${iw}`);
+  else{lines.push('  invariants:');for(const s of state.inv)lines.push(`    - ${s}`);if(!state.inv.size)lines.push('    []')}
+  return lines.join('\n')+'\n';
+}
+/* The RunRequest api/run takes (server.py build_argv). Nothing here is a command line: the console
+   validates each field and builds the argv, so the page cannot hand it a shell string. */
+function invList(){const w=groupWord(state.inv,state.invGroup);return w?[w]:[...state.inv]}
+function runRequest(){
+  const f=form();const b={dut:state.dut,mode:state.mode==='flags'?'flags':'file',seed:state.mode==='file'&&Number.isInteger(f.seed)&&f.seed>0?f.seed:null,repeat:f.repeat,dry_run:!!f.dry,runner:state.preset,baseline:!!state.baseline};
+  if(b.mode==='file')b.yaml=buildYaml();else{b.specs=state.pool.map(x=>specOf(x.name,x.p));b.invariants=invList()}
+  if(b.runner==='sonic-mgmt')b.tests=f.tests.split(/\s+/).filter(Boolean);
+  return b;
+}
+/* The same request as the command it becomes, for copy-paste only. */
+function chaosArgs(){
+  const b=runRequest();const a=[];
+  if(b.mode==='file')a.push(`--chaos-file ${ymlHostPath()}`);else for(const x of b.specs)a.push(`--chaos ${shellQuote(x)}`);
+  if(b.seed!==null)a.push(`--chaos-seed ${b.seed}`);
+  if(b.repeat>1)a.push(`--chaos-repeat ${b.repeat}`);
+  if(b.dry_run)a.push('--chaos-dry-run');
+  if(b.baseline&&b.runner==='standalone')a.push('--baseline');
+  if(b.runner==='standalone'&&b.mode==='flags')for(const i of b.invariants)a.push(`--invariant ${i}`);
+  return a;
+}
+function ymlHostPath(){return `experiments/${form().name}.yml`}
+function shellQuote(s){return /^[A-Za-z0-9_=:.,\/\[\]-]+$/.test(s)?s:"'"+s.replace(/'/g,"'\\''")+"'"}
+function buildCmd(){
+  const f=form(),c=chaosArgs().join(' ');
+  return state.preset==='sonic-mgmt'?`python3 -m pytest ${f.tests} --inventory ../ansible/inventory --host-pattern ${state.dut} --testbed ${state.dut} --testbed_file ../ansible/testbed.yaml --log-cli-level info ${c}`
+    :`sonic-chaos run --dut ${state.dut} ${c}`;
+}
+function schedule(){
+  const f=form();const dur=parseDur(f.duration),gap=parseDur(f.minGap);
+  if(dur===null||gap===null||gap<=0)return [];
+  const pool=[...state.pool];
+  if(!pool.length)return [];
+  const rng=new PyRandom(f.seed);const out=[];let off=0;
+  const count=/^\d+$/.test(f.count)?+f.count:pool.length;
+  if(count<=pool.length){
+    // each fault once (the default), in seeded order, gap apart -- mirrors experiment.py exactly
+    const order=rng.shuffle([...pool]);
+    for(const x of order.slice(0,count)){out.push({t:off,f:x});off+=gap}
+    return out;
+  }
+  const weighted=pool.flatMap(x=>Array(+(x.weight||1)).fill(x));
+  while(out.length<count&&out.length<2000){out.push({t:off,f:rng.choice(weighted)});off+=gap}
+  return out;
+}
+function hl(cmd){return cmd.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/(--chaos[-a-z]*)/g,'<span class="f">$1</span>').replace(/(pytest)/,'<span class="k">$1</span>')}
+/* ───────────────────────────── backend ───────────────────────────── */
+const backend={ok:false,info:null};
+async function probeBackend(){
+  try{const ctl=new AbortController();setTimeout(()=>ctl.abort(),1500);
+    const r=await fetch('api/health',{signal:ctl.signal});if(!r.ok)throw 0;backend.info=await r.json();backend.ok=true;
+    if(backend.info.active_run&&!state.run)adoptRun(backend.info.active_run,backend.info.active_cmd);
+    // a page opened on another machine carries its own saved runner; the backend knows which
+    // ones can work here, and silently failing with "No module named pytest" helps nobody
+    const can=backend.info.runners||{};
+    if(Object.keys(can).length&&can[state.preset]===false){
+      const ok=Object.keys(PRESETS).find(k=>can[k]);
+      if(ok){backend.presetNote=`${PRESETS[state.preset].label} cannot run on this machine, so the runner is ${PRESETS[ok].label}.`;
+        state.preset=ok;}
+    }
+    await syncWithAgent();
+    $('backendPill').className='pill ok';$('backendText').textContent=`sonic-chaos ${backend.info.version||''}${backend.info.agent===false?', plugin failed to load':''}`;
+    try{const d=await(await fetch('api/duts')).json();if(Array.isArray(d)){backend.duts=true;for(const x of d){if(!DUTS.some(y=>y.host===x.host))DUTS.push(Object.assign({cls:'hw',asic:'—',image:'—',topo:'—',os:'—',recover:'240s',recovery:'unknown platform; measure the noise floor before trusting a result'},x,{hwsku:x.hwsku||'unknown platform',topo:x.topo||'—'}))}
+      // a saved session may name a switch this console does not offer: take the first one it does
+      if(DUTS.length&&!DUTS.some(y=>y.host===state.dut)){state.dut=DUTS[0].host;setRecover(parseDur(dutOf().recover));renderEditor()}renderDuts()}}catch(e){}
+  }catch(e){backend.ok=false;$('backendPill').className='pill sim';$('backendText').textContent='no runner, simulation mode'}
+  renderOutputs();
+}
+
+/* ── box state before a run ────────────────────────────────────────────────────────────────
+   A fault against an idle daemon proves nothing, and a table with millions free can never fill.
+   Both were learned the slow way: MACsec under a starved orchagent on a 790-route box, and an
+   exhaust run on a table with 3.2M entries available. Read it first, say so plainly. */
+/* The kernel spells "no limit" as the literal word max, and a cap as "<quota> <period>" in
+   microseconds. Nobody reading a status panel should have to know either. */
+function fmtCpuLimit(v){
+  if(!v||/^max/.test(v))return {text:'none',capped:false};
+  const m=/^(\d+)\s+(\d+)/.exec(v);
+  if(!m)return {text:v,capped:true};
+  const pct=Math.round(+m[1]/+m[2]*100);
+  return {text:pct>=100?`${(pct/100).toFixed(pct%100?1:0)} cores`:`${pct}% of one core`,capped:true};
+}
+function fmtMemLimit(v){
+  if(!v||v==='max')return {text:'none',capped:false};
+  const n=+v;if(!isFinite(n))return {text:v,capped:true};
+  return {text:n>=1073741824?`${(n/1073741824).toFixed(1)} GB`:`${Math.round(n/1048576)} MB`,capped:true};
+}
+async function probeBaseline(){
+  const dut=state.dut;if(!dut)return;
+  const out=$('baseOut'),hint=$('baseHint');
+  hint.textContent='reading '+dut+'…';out.innerHTML='';
+  if(!backend.ok){hint.textContent='The runner is offline, so the box cannot be read from here.';return}
+  let b;
+  try{const r=await fetch(`api/baseline?dut=${encodeURIComponent(dut)}&container=${encodeURIComponent(targetContainer())}`);
+    b=await r.json();
+    if(!r.ok||!b.ok){hint.textContent=b&&b.error?b.error:'could not read the box';return}
+  }catch(e){hint.textContent='could not reach the runner';return}
+  state.baseline_read=b;
+  hint.textContent=`${b.hwsku||'?'} · ${b.image||'image unknown'}`;
+  const cell=(l,v,warn)=>`<div><div class="bl">${l}</div><div class="bv${warn?' warn':''}">${v}</div></div>`;
+  const cpuL=fmtCpuLimit(b.cpu_max), memL=fmtMemLimit(b.memory_max), capped=cpuL.capped, memCapped=memL.capped;
+  out.innerHTML=`<div class="basegrid">
+    ${cell('ASIC routes',b.routes.toLocaleString(),b.routes<5000)}
+    ${cell('BGP peers',b.bgp_peers,!b.bgp_peers)}
+    ${cell(b.container+' cpu',b.cpu_pct+'%',false)}
+    ${cell(b.container+' mem',b.memory_mb+' MB',false)}
+    ${cell('CPU limit on '+b.container,cpuL.text,capped)}
+    ${cell('memory limit on '+b.container,memL.text,memCapped)}
+    ${cell('uptime',b.uptime_s>3600?Math.round(b.uptime_s/3600)+'h':Math.round(b.uptime_s/60)+'m',b.uptime_s<600)}
+    ${cell('CRM poll',(b.crm_poll_s||'?')+'s',b.crm_poll_s>=300)}
+  </div>${baselineNotes(b).map(n=>`<p class="basenote">${n}</p>`).join('')}`;
+}
+function targetContainer(){
+  const x=state.pool[0]||{name:state.editing,p:state.editParams};
+  const t=x.p&&(x.p.container||x.p.process);
+  return isContainer(t)?t:(TARGETS.processes[t]&&TARGETS.processes[t].c)||'swss';
+}
+/* Say what this box can and cannot show, for the conditions actually in the pool. */
+function baselineNotes(b){
+  const n=[];const names=state.pool.map(x=>x.name);
+  if(b.routes<5000)n.push(`<b>This box has ${b.routes.toLocaleString()} routes.</b> Faults whose finding is "orchagent could not keep up" need a real route table — on a box like this orchagent is idle and a cap or a starve is a no-op.`);
+  if(b.cpu_pct<2&&(names.includes('cpu')||names.includes('hog')))n.push(`<b>${b.container} is idle at ${b.cpu_pct}%.</b> A ceiling cannot make a process spend CPU it is not asking for: <code>cpu=</code> will read as a pass having changed nothing. <code>hog=</code> bounds the budget <em>and</em> spends it, which is the one that bites on an idle box.`);
+  if(b.crm_poll_s>=300&&names.includes('exhaust'))n.push(`<b>CRM polls every ${b.crm_poll_s}s.</b> Counters are sampled, not live — a fill and release inside one interval reads as if nothing happened. The injector waits for a poll, but budget for it, or lower the interval with <code>crm config polling interval 10</code>.`);
+  if(names.includes('exhaust')){
+    const want={route:'ipv4_route',route6:'ipv6_route',neighbor:'ipv4_neighbor',nexthop:'ipv4_nexthop',nhg:'nexthop_group'};
+    for(const x of state.pool.filter(y=>y.name==='exhaust')){
+      const res=x.p.table==='acl'?'acl_entry':want[x.p.table];const row=res==='acl_entry'?b.crm.acl_entry:(b.crm.main||{})[res];
+      if(!row){n.push(res==='acl_entry'
+        ?`<code>acl_entry</code> has no rows yet — CRM lists it per ACL table and only once a table holds rules, so there is nothing to read until the fault adds some. That is expected, not a missing counter.`
+        :`<b>${res||x.p.table} is not in this box's CRM output.</b> The round trip this injector asserts has nothing to measure against here.`);continue}
+      const asked=+x.p.count||0,free=row.available;
+      n.push(`<code>${res}</code>: ${row.used.toLocaleString()} used, <b>${free.toLocaleString()} free</b>${free>200000?' — far too large to fill; this can only ever be a partial fill, never a TABLE_FULL':''}${asked&&asked>free?` — asking for ${asked.toLocaleString()} exceeds what is free, so the excess will be refused (that is the interesting case)`:''}`);
+    }
+  }
+  if(fmtCpuLimit(b.cpu_max).capped)n.push(`<b>${b.container} already has a CPU limit of ${fmtCpuLimit(b.cpu_max).text}.</b> Something left a fault applied; this is not a clean baseline.`);
+  if(fmtMemLimit(b.memory_max).capped)n.push(`<b>${b.container} already has a memory limit of ${fmtMemLimit(b.memory_max).text}</b> — read from the kernel, so it is real and enforcing right now. A released <code>mem=</code> fault leaves one behind on the next container restart: docker accepts <code>update --memory=0</code>, ignores it, and recreates the cgroup from its stored value. Clear it with <code>echo max &gt; .../memory.max</code> before trusting a measurement.`);
+  if(b.uptime_s<600)n.push(`The box booted ${Math.round(b.uptime_s/60)} minutes ago; routes and sessions may still be converging.`);
+  const killsSwss=state.pool.some(x=>x.name==='kill'&&x.p.how!=='container'&&(TARGETS.processes[x.p.process]||{}).c==='swss');
+  if(killsSwss&&b.routes>20000)n.push(`<b>A kill of a swss daemon restarts the whole container, and that reprograms all ${b.routes.toLocaleString()} routes.</b> On a lab switch with 102k routes, route_check still reported real missing routes five minutes after the kill and was clean shortly after. Set recover-within to several minutes here, or the run fails on a box that is simply still catching up.`);
+  return n;
+}
+
+/* ───────────────────────────── dial ───────────────────────────── */
+/* ───────────────────────────── slider ───────────────────────────── */
+function dial(o){
+  const min=o.min,max=o.max,step=o.step||1;
+  const snap=(v)=>{v=Math.round(v/step)*step;return Math.min(max,Math.max(min,isNaN(v)?min:v))};
+  const el=document.createElement('div');el.className='slider';
+  const id='sl'+Math.random().toString(36).slice(2,7);
+  el.innerHTML=`<div class="sl-hd"><label for="${id}">${o.label}</label><span class="sl-val"><input type="number" id="${id}_n" min="${min}" max="${max}" step="${step}" aria-label="${o.label}"><small>${o.unit||''}</small></span></div><input type="range" id="${id}" min="${min}" max="${max}" step="${step}">`;
+  const rng=el.querySelector('input[type=range]'),num=el.querySelector('input[type=number]');
+  let v=snap(+o.value);
+  const paint=()=>{rng.value=v;num.value=v;rng.style.setProperty('--f',((v-min)/(max-min||1)*100)+'%')};
+  const set=(nv,final)=>{v=snap(nv);paint();if(final)o.onChange&&o.onChange(v);else o.onInput&&o.onInput(v)};
+  paint();
+  rng.addEventListener('input',()=>set(+rng.value,false));
+  rng.addEventListener('change',()=>set(+rng.value,true));
+  num.addEventListener('input',()=>{if(num.value!=='')set(+num.value,false)});
+  num.addEventListener('change',()=>set(+num.value,true));
+  el.get=()=>v;el.set=(nv)=>{v=snap(+nv);paint()};
+  return el;
+}
+
+/* ───────────────────────────── glass thumb ─────────────────────────────
+   CSS cannot know how wide "critical_processes" is, so measure the pressed button
+   and hand its box to the group as custom properties; the ::before slides there.
+   Runs after every render, on resize, and when a <details> reveals a group that
+   was laid out at zero width. */
+/* The header switcher slides because it is a permanent element: its thumb has somewhere to
+   slide FROM. Everything inside the editor is torn down and rebuilt by renderEditor() on every
+   click, so glide() met a brand-new element, called it cold, and landed the thumb with no
+   motion. Remember the last geometry per stable key (data-seg); on a rebuild, land on the old
+   spot with transitions off, force one layout, then let it slide to the new one. */
+const SEG_GEO=new Map();
+function glide(){
+  const put=(g,t)=>{g.style.setProperty('--gx',t.x+'px');g.style.setProperty('--gy',t.y+'px');
+    g.style.setProperty('--gw',t.w+'px');g.style.setProperty('--gh',t.h+'px')};
+  for(const g of document.querySelectorAll('.seg,.screens,.tgl')){
+    const on=g.querySelector('[aria-pressed="true"]');
+    if(!on||!on.offsetWidth){g.style.setProperty('--gon','0');continue}
+    const key=g.dataset.seg||g.id||null;
+    const prev=key?SEG_GEO.get(key):null;
+    const cold=g.style.getPropertyValue('--gon')!=='1';
+    const target={x:on.offsetLeft,y:on.offsetTop,w:on.offsetWidth,h:on.offsetHeight};
+    if(cold&&prev&&(prev.x!==target.x||prev.w!==target.w||prev.y!==target.y)){
+      g.classList.add('nofx');put(g,prev);g.style.setProperty('--gon','1');
+      void g.offsetWidth;                    // commit the old position before the transition is re-enabled
+      g.classList.remove('nofx');put(g,target);
+    }else if(cold){
+      g.classList.add('nofx');put(g,target);g.style.setProperty('--gon','1');
+      requestAnimationFrame(()=>g.classList.remove('nofx'));
+    }else put(g,target);
+    if(key)SEG_GEO.set(key,target);
+  }
+}
+
+/* ───────────────────────────── screens ───────────────────────────── */
+function goStep(n){
+  n=(+n===2)?2:1;
+  state.step=n;
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',+s.dataset.screen===n));
+  if(!document.querySelector('.screen.active'))document.querySelector('.screen').classList.add('active');
+  document.querySelectorAll('.screens button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.go===n)));
+  window.scrollTo({top:0,behavior:'auto'});glide();
+  saveLocal();
+}
+
+/* ───────────────────────────── target ───────────────────────────── */
+function renderDuts(){
+  const dl=$('dutKnown');
+  if(dl.options.length!==DUTS.length)
+    dl.innerHTML=DUTS.map(d=>`<option value="${d.host}">${d.hwsku} · ${d.cls==='hw'?'hardware':'virtual'}${d.verified?' · verified':''}</option>`).join('');
+  const box=$('dutSel');if(box.value!==state.dut&&document.activeElement!==box)box.value=state.dut;
+}
+
+/* ───────────────────────────── fault editor ───────────────────────────── */
+function renderConditions(){
+  const root=$('conds');
+  root.innerHTML=Object.entries(INJECTORS).map(([n,i])=>
+    `<button class="cond" type="button" data-inj="${n}" aria-pressed="${state.editing===n}" title="${i.summary}"><b>${n}</b><span>${i.short||i.summary}</span></button>`).join('');
+  root.querySelectorAll('.cond').forEach(b=>b.addEventListener('click',()=>{
+    state.editing=b.dataset.inj;state.editParams=defaults(state.editing);renderConditions();renderEditor()}));
+}
+/* What the plugin says will REFUSE at apply time, and why. /api/validate cannot answer this:
+   exhaust and storm accept the spec and raise inside apply(), after the steady-state gate has
+   already been paid for. The plugin publishes CAPABILITIES; the page greys rather than hiding,
+   so an option that exists on other hardware is visibly unavailable here instead of missing. */
+function capOf(name,key){
+  const c=backend.agent&&backend.agent.injectors&&backend.agent.injectors[name];
+  const cap=c&&c.capabilities&&c.capabilities[key];
+  return cap&&Array.isArray(cap.available)?cap:null;
+}
+const capBad=(name,key,opt)=>{const c=capOf(name,key);return c&&!c.available.includes(opt)};
+const capWhy=(name,key,opt)=>{const c=capOf(name,key);return (c&&c.unavailable&&c.unavailable[opt])||'the plugin refuses this at apply time on this platform'};
+
+function fieldControl(f,p,name){
+  const key=f.k;let val=p[key]??f.def;
+  const wrap=document.createElement('div');wrap.className='field'+(f.wide?' wide':'');
+  const live=()=>{const c=$('specCode');if(c)c.textContent=specOf(name,p)};
+  const desc=f.desc?`<span class="pdesc">${f.desc}</span>`:'';
+  if(f.type==='range'||f.type==='int'){
+    const d=dial({label:f.label+(f.unit?` (${f.unit})`:''),min:f.min??0,max:f.max??100,step:f.step||1,value:val,
+      onInput:(v)=>{p[key]=String(v);live()},onChange:(v)=>{p[key]=String(v);renderEditor()}});
+    wrap.appendChild(d);wrap.insertAdjacentHTML('beforeend',desc);
+    return wrap;
+  }
+  if(f.type==='target'){
+    /* A daemon and the container it runs in are different targets with different blast radii,
+       so they are picked separately rather than mixed into one list of twenty-odd names. */
+    const kinds=f.containersOnly?['container']:(f.only?['process']:['process','container']);
+    const kind=TARGETS.containers.includes(val)&&!TARGETS.processes[val]?'container':(kinds.includes('process')?'process':'container');
+    const list=kind==='container'?TARGETS.containers:(f.only||Object.keys(TARGETS.processes));
+    const opts=list.map(t=>`<option value="${t}" ${t===val?'selected':''}>${t}${isProtected(t)?' · protected':''}</option>`).join('');
+    const w=TARGETS.processes[val]?.w;
+    wrap.innerHTML=`<label>${f.label}</label>
+      ${kinds.length>1?`<div class="seg kindseg" role="group" aria-label="Target kind" data-seg="${name}.${key}.kind">
+        <button type="button" data-kind="process" aria-pressed="${kind==='process'}">Process</button>
+        <button type="button" data-kind="container" aria-pressed="${kind==='container'}">Container</button></div>`:''}
+      <select>${opts}</select>
+      <span class="hint">${kind==='container'?'every process in the container is affected':(w?'waited on by '+w:'one daemon inside '+(TARGETS.processes[val]?.c||'its container'))}</span>${desc}`;
+    const HOW_FOR_KIND={kill:{container:'container',process:'sigkill'}};
+    wrap.querySelectorAll('[data-kind]').forEach(btn=>btn.addEventListener('click',()=>{
+      const to=btn.dataset.kind;
+      if(to===kind)return;
+      p[key]=to==='container'?(TARGETS.processes[val]?.c||'swss'):'orchagent';
+      const how=HOW_FOR_KIND[name]&&HOW_FOR_KIND[name][to];
+      if(how)p.how=how;   // kill -9 and SIGSTOP act on a daemon; a container needs its own verb
+      renderEditor();
+    }));
+    wrap.querySelector('select').addEventListener('change',e=>{p[key]=e.target.value;renderEditor()});
+    return wrap;
+  }
+  if(f.type==='select'){
+    /* options may be a plain list, a function of the current params, or a list of
+       {group,items}: a long catalogue reads better with the handful anyone actually reaches
+       for at the top and the remainder one group down, rather than cut away. */
+    const raw=typeof f.options==='function'?f.options(p):f.options;
+    const grouped=raw.length&&typeof raw[0]==='object';
+    const opts=grouped?raw.flatMap(g=>g.items):raw;
+    /* A narrowed list can strip the option that is currently selected -- switch the object type
+       from route_entry to acl_entry while op is bulk_create and that op no longer exists. op is
+       positional, so specOf would emit the stale value and build a spec the plugin refuses.
+       Clamp it here, where every select goes through. */
+    if(!opts.includes(val)&&opts.length){p[key]=val=opts[0]}
+    if(grouped){
+      const why=typeof f.hint2==='function'?f.hint2(p):'';
+      const body=raw.map(g=>`<optgroup label="${g.group}">${g.items.map(o=>
+        `<option value="${o}" ${o===val?'selected':''} ${capBad(name,key,o)?'disabled':''}>${o===''?'(none)':o}${capBad(name,key,o)?' · unavailable':''}</option>`).join('')}</optgroup>`).join('');
+      wrap.innerHTML=`<label>${f.label}</label><select>${body}</select>`+
+        [f.hint,why].filter(Boolean).map(h=>`<span class="hint">${h}</span>`).join('');
+      wrap.querySelector('select').addEventListener('change',e=>{p[key]=e.target.value;renderEditor()});
+      return wrap;
+    }
+    if(opts.length<=3){
+      wrap.innerHTML=`<label>${f.label}</label><div class="seg mono" data-seg="${name}.${key}">${opts.map(o=>`<button type="button" data-v="${o}" aria-pressed="${o===val}" ${capBad(name,key,o)?`disabled title="${capWhy(name,key,o).replace(/"/g,'&quot;')}" style="opacity:.45"`:''}>${o===''?'none':o}</button>`).join('')}</div>${f.hint?`<span class="hint">${f.hint}</span>`:''}${capBad(name,key,val)?`<span class="hint" style="color:var(--warn)">${capWhy(name,key,val)}</span>`:''}`;
+      wrap.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{if(b.disabled)return;p[key]=b.dataset.v;renderEditor()}));
+      return wrap;
+    }
+    wrap.innerHTML=`<label>${f.label}</label><select>${opts.map(o=>`<option value="${o}" ${o===val?'selected':''} ${capBad(name,key,o)?'disabled':''}>${o===''?'(none)':o}${capBad(name,key,o)?' · unavailable':''}</option>`).join('')}</select>${f.hint?`<span class="hint">${f.hint}</span>`:''}${capBad(name,key,val)?`<span class="hint" style="color:var(--warn)">${capWhy(name,key,val)}</span>`:''}`;
+    wrap.querySelector('select').addEventListener('change',e=>{p[key]=e.target.value;renderEditor()});
+    return wrap;
+  }
+  if(f.type==='text'){
+    wrap.innerHTML=`<label>${f.label}</label><input type="text" class="mono" spellcheck="false" value="${String(val).replace(/"/g,'&quot;')}">${desc}`;
+    const inp=wrap.querySelector('input');
+    inp.addEventListener('input',()=>{p[key]=inp.value;live()});
+    inp.addEventListener('change',()=>renderEditor());
+    return wrap;
+  }
+  if(f.type==='bool'){
+    wrap.innerHTML=`<label class="sw"><input type="checkbox" ${val?'checked':''}><i></i>${f.label}</label>${desc}`;
+    wrap.querySelector('input').addEventListener('change',e=>{p[key]=e.target.checked;renderEditor()});
+    return wrap;
+  }
+  return wrap;
+}
+/* Visible: the spec's positional parameters, plus anything that is currently blocking. */
+function isPrimary(f,name){
+  const inj=INJECTORS[name];
+  return inj.positional.includes(f.k)||f.k==='force'||(name==='sai'&&f.k==='mode');
+}
+function renderEditor(){
+  const name=state.editing,inj=INJECTORS[name];
+  if(!Object.keys(state.editParams).length)state.editParams=defaults(name);
+  const p=state.editParams,dut=dutOf();
+  const err=validate(name,p,dut),warns=warnings(name,p,dut);
+  const shown=inj.fields.filter(f=>!f.derived&&(!f.show||f.show(p)));
+  const primary=shown.filter(f=>isPrimary(f,name)),advanced=shown.filter(f=>!isPrimary(f,name));
+  const ed=$('editor');
+  ed.innerHTML=`
+    <div class="ed-hd"><h3>${name}</h3></div>
+    <p class="summary">${inj.summary}</p>
+    <div class="fields" id="primaryFields"></div>
+    ${advanced.length?`<details class="more" style="margin-top:14px"><summary>More parameters <b>(${advanced.length})</b></summary><div class="fields" id="advFields"></div></details>`:''}
+    <div class="outhd" style="margin:16px 0 0"><span class="t">Plugin spec</span></div>
+    <pre class="specbox" id="specWrap"><span class="fl">--chaos</span> <span id="specCode">${specOf(name,p)}</span></pre>
+    <div class="err">${err}</div>
+    ${warns.map(w=>`<div class="warnbox">${w}</div>`).join('')}
+    <div class="addrow">
+      <button class="btn add" id="addToPool" ${err?'disabled':''}>Add to pool</button>
+    </div>`;
+  for(const f of primary)$('primaryFields').appendChild(fieldControl(f,p,name));
+  if(advanced.length)for(const f of advanced)$('advFields').appendChild(fieldControl(f,p,name));
+  $('addToPool').addEventListener('click',()=>{
+    const spec=specOf(name,p);
+    const dup=state.pool.find(x=>specOf(x.name,x.p)===spec);
+    if(dup){
+      // already there: point at it rather than add a second copy that would run twice
+      renderAll();
+      const row=[...$('pool').querySelectorAll('.prow')].find(r=>r.querySelector('.s')?.textContent===spec);
+      if(row){row.classList.add('flash');setTimeout(()=>row.classList.remove('flash'),900)}
+      return;
+    }
+    state.pool.push({id:Math.random().toString(36).slice(2,8),name,p:{...p}});
+    renderAll();
+  });
+  glide();
+}
+
+/* ───────────────────────────── pool ───────────────────────────── */
+/* The card carries Start, so it stays on screen even when the pool is empty -- a button that
+   vanishes with the last condition looks like the page broke. */
+function renderPool(){
+  const root=$('pool');root.innerHTML='';
+  if(!state.pool.length)root.innerHTML='<p class="poolempty">Nothing in the pool yet. Tune a condition above and press Add to pool.</p>';
+  for(const f of state.pool){
+    const row=document.createElement('div');row.className='prow';
+    const err=validate(f.name,f.p,dutOf());
+    row.innerHTML=`<span class="bar"></span><span class="s" title="Edit">${err?'⚠ ':''}${specOf(f.name,f.p)}</span>
+      <button class="x" type="button" aria-label="Remove">✕</button>`;
+    row.querySelector('.x').addEventListener('click',()=>{state.pool=state.pool.filter(x=>x.id!==f.id);renderAll()});
+    row.querySelector('.s').addEventListener('click',()=>{state.editing=f.name;state.editParams={...f.p};renderConditions();renderEditor()});
+    root.appendChild(row);
+  }
+  $('poolMeta').textContent=state.pool.length>1?`${state.pool.length} conditions, one active at a time`:'';
+}
+
+/* ───────────────────────────── contract ───────────────────────────── */
+const cdials={};
+function setRecover(sec){if(sec==null)return;$('recoverWithin').value=sec%60===0&&sec>=120?`${sec/60}m`:`${sec}s`;cdials.recover?.set(sec)}
+/* Built once. Rebuilding the segments on every render would drop the click listeners a
+   moment before the click lands, and rebuilding the dials would fight the drag in progress. */
+function buildChecks(){
+  /* A group, not nine checkboxes. The names below are shown so the choice is legible, but
+     they are not individually selectable -- an enumerated list is one more thing that goes
+     stale the moment a tenth check is added to the plugin. */
+  for(const [id,which] of [['invSeg','inv'],['steadySeg','steady']]){
+    $(id).innerHTML=Object.keys(GROUPS).map(g=>
+      `<button type="button" data-g="${g}" data-which="${which}">${g}</button>`).join('');
+  }
+  document.querySelectorAll('[data-g]').forEach(b=>b.addEventListener('click',()=>{
+    const w=b.dataset.which;state[w+'Group']=b.dataset.g;state[w]=new Set(membersOf(b.dataset.g));renderAll()}));
+  const box2=$('contractDials');box2.innerHTML='';
+  cdials.recover=dial({label:'Recover within (s)',min:30,max:900,step:10,value:parseDur($('recoverWithin').value)||180,onChange:(v)=>{setRecover(v);renderAll()}});
+  cdials.duration=dial({label:'Duration (min)',min:1,max:120,step:1,value:Math.max(1,Math.round((parseDur($('duration').value)||600)/60)),onChange:(v)=>{$('duration').value=`${v}m`;renderAll()}});
+  cdials.count=dial({label:'Faults to schedule',min:1,max:60,step:1,value:/^\d+$/.test($('count').value)?+$('count').value:Math.max(1,state.pool.length),
+    onChange:(v)=>{$('count').value=(v===state.pool.length||v===1&&!state.pool.length)?'':String(v);renderAll()}});
+  cdials.gap=dial({label:'Gap between faults (s)',min:10,max:600,step:10,value:parseDur($('minGap').value)||90,onChange:(v)=>{$('minGap').value=`${v}s`;renderAll()}});
+  cdials.repeat=dial({label:'Repeat each test (runs)',min:1,max:50,step:1,value:state.repeat||1,onChange:(v)=>{state.repeat=v;renderAll()}});
+  for(const d of Object.values(cdials))box2.appendChild(d);
+  paintChecks();
+}
+/* Every render: which group is pressed, and what that group actually checks. */
+function paintChecks(){
+  document.querySelectorAll('[data-g]').forEach(b=>
+    b.setAttribute('aria-pressed',String(state[b.dataset.which+'Group']===b.dataset.g)));
+  for(const [id,which] of [['invWhat','inv'],['steadyWhat','steady']]){
+    const g=state[which+'Group'];
+    $(id).innerHTML=`${GROUPS[g]}<br>${membersOf(g).map(k=>`<code>${k}</code>`).join(' ')}`;
+  }
+  cdials.recover?.set(parseDur($('recoverWithin').value)||180);
+  cdials.duration?.set(Math.max(1,Math.round((parseDur($('duration').value)||600)/60)));
+  cdials.gap?.set(parseDur($('minGap').value)||90);
+  cdials.repeat?.set(state.repeat||1);
+}
+
+/* ───────────────────────────── outputs ───────────────────────────── */
+function problems(){
+  const f=form(),d=dutOf(),p=[];
+  if(!state.pool.length)p.push({msg:'Add a condition to the pool.',go:1});
+  for(const x of state.pool){const e=validate(x.name,x.p,d);if(e)p.push({msg:e,go:1})}
+  for(const [spec,err] of Object.entries(backend.specErrors||{}))
+    p.push({msg:spec==='__agent'?err:`the plugin refuses ${spec}: ${err}`,go:1});
+  if(!state.inv.size)p.push({msg:'No invariants armed, so nothing is checked after a fault and no verdict can flip.',go:1});
+  // an experiment file repeats the pool every min_gap: count kills of swss daemons per 20-minute
+  // window against systemd's three starts. Six kills in ten minutes on a lab switch locked the box
+  // at the second one, and the operator had asked for one.
+  if(state.mode==='file'){
+    const sch=schedule().filter(x=>x.f.name==='kill'&&x.f.p.how!=='container'&&(TARGETS.processes[x.f.p.process]||{}).c==='swss');
+    let worst=0;for(const a of sch){worst=Math.max(worst,sch.filter(b=>b.t>=a.t&&b.t<a.t+1200).length)}
+    if(worst>=3){
+      const gap=parseDur(f.minGap)||90;
+      p.push({msg:`This schedule kills a swss daemon ${sch.length} times over ${f.duration} — ${worst} inside one 20-minute window. Each kill restarts the whole swss container, and systemd allows three starts per twenty minutes, so the box locks up at the third and stays down. Set Gap between faults to 7m or more (${Math.ceil(gap/60)}m now), shorten the duration so at most two land in twenty minutes, or switch Launch as to --chaos flags to run it once.`,go:1});
+    }
+  }
+  // the same target killed by two pool entries runs as two kills, back to back
+  const kills={};for(const x of state.pool)if(x.name==='kill'){kills[x.p.process]=(kills[x.p.process]||0)+1}
+  for(const [proc,n] of Object.entries(kills))if(n>1)p.push({msg:`kill=${proc} is in the pool ${n} times, so the runner kills it ${n} times back to back${(TARGETS.processes[proc]||{}).c==='swss'?' — on this image each one restarts the whole swss container, and systemd allows three starts in twenty minutes':''}. Remove one unless that is the experiment.`,go:1});
+  if(parseDur(f.duration)===null||parseDur(f.minGap)===null||parseDur(f.recover)===null)p.push({msg:'A budget is not a duration like 30s / 10m / 2h.',go:1});
+  if(state.mode==='file'&&!f.name)p.push({msg:'The experiment needs a name.',go:1,focus:'expName'});
+  if(!f.tests&&state.preset==='sonic-mgmt')p.push({msg:'Name a test module for the pytest runner.',go:1,focus:'tests'});
+  if(state.pool.length&&state.mode==='file'&&parseDur(f.duration)!==null&&parseDur(f.minGap)&&schedule().length===0)p.push({msg:'The gap is longer than the duration, so nothing would be scheduled.',go:1});
+  if(backend.ok&&backend.duts&&!DUTS.length)p.push({msg:'This console offers no switch. Start it with one: sonic-chaos console --dut ssh://user@host',go:1});
+  else if(!state.dut)p.push({msg:'Name the switch.',go:1,focus:'dutSel'});
+  else if(backend.ok&&backend.duts&&!DUTS.some(x=>x.host===state.dut))p.push({msg:`This console does not offer ${state.dut}; it offers ${DUTS.map(x=>x.host).join(', ')}.`,go:1,focus:'dutSel'});
+  return p;
+}
+function renderOutputs(){
+  const f=form(),d=dutOf();
+  $('cmdOut').innerHTML=hl(buildCmd());
+  $('runCmd').textContent=buildCmd();$('runner').value=buildCmd();
+  $('yamlWrap').hidden=state.mode!=='file';
+  $('yamlName').textContent=ymlHostPath();
+  $('yamlOut').innerHTML=buildYaml().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/(#.*)$/gm,'<span class="c">$1</span>');
+  $('modeFile').setAttribute('aria-pressed',String(state.mode==='file'));
+  $('modeFlags').setAttribute('aria-pressed',String(state.mode==='flags'));
+  $('presetName').textContent=PRESETS[state.preset].label;
+  $('presetWhy').textContent=(backend.presetNote?backend.presetNote+' ':'')+PRESETS[state.preset].why;
+  const can=(backend.info&&backend.info.runners)||{};
+  $('presetSeg').querySelectorAll('button').forEach(b=>{
+    const bad=can[b.dataset.preset]===false;
+    b.disabled=bad;b.title=bad?'not available on the machine running the backend':'';
+    b.style.opacity=bad?.45:'';});
+  $('presetSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.preset===state.preset)));
+  $('baseline').checked=state.baseline;$('baseline').closest('label').style.display=state.preset==='standalone'?'':'none';   // a standalone-runner switch
+  const sch=state.mode==='file'?schedule().length:state.pool.length;
+  $('contractLine').innerHTML=`invariants <b>${state.invGroup}</b> <span class="sep">·</span> steady state <b>${state.steadyGroup}</b><span class="sep"> · </span>recover within ${f.recover}<span class="sep"> · </span>seed ${f.seed}<span class="sep"> · </span>${state.mode==='file'?`${sch} faults over ${f.duration}, ${f.minGap} apart`:`faults held, ×${f.repeat}`}`;
+  $('contractAdvN').textContent=`(invariant group, 4 budgets, seed, runner)`;
+  $('schedK').textContent=state.mode!=='file'||!state.pool.length?''
+    :sch<=state.pool.length?`${sch===1?'This fault runs once.':`These ${state.pool.length} faults each run once, ${f.minGap} apart, in seeded order.`} Raise “Faults to schedule” (Contract › Advanced) to repeat.`
+    :`Seed ${f.seed} repeats this pool into ${sch} faults, ${f.minGap} apart${state.pool.length===1?` — the same fault ${sch} times`:''}.`;
+  const probs=problems(),running=!!state.run;
+  if(backend.presetNote)probs.unshift({msg:backend.presetNote,go:1});
+  $('problems').innerHTML=(running?`<div class="runbanner">A run is in progress on <b>${state.dut}</b>. Don’t run commands against that switch from anywhere else until it finishes: a second ssh session mid-apply has killed a run, and a reading taken while a fault is landing is not a baseline.</div>`:'')
+    +probs.map(p=>`<button type="button" data-focus="${p.focus||''}">· ${p.msg} ${p.focus?'<u>fix it</u>':''}</button>`).join('')
+    +((backend.schema&&backend.schema.risk)||[]).map(d=>`<div class="driftline">· ${d}</div>`).join('');
+  renderSchemaPanel();
+  $('problems').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    if(b.dataset.focus){$('contractAdv').open=true;setTimeout(()=>$(b.dataset.focus)?.focus(),50)}}));
+  $('start').disabled=running||probs.length>0;
+  $('startWhy').textContent=running?'A run is in progress.':probs.length?`${probs.length} thing${probs.length>1?'s':''} to fix first`:(f.dry?'Dry run: the plan is printed, no DUT is touched.':(backend.ok?'Runs on this machine through the runner.':'The runner is offline, so this will be simulated.'));
+  $('startSub').textContent=f.dry?`dry run on ${d.host}`:state.mode==='file'?`${sch} faults on ${d.host}, seed ${f.seed}`:`${state.pool.length} fault${state.pool.length===1?'':'s'} held on ${d.host}, ×${f.repeat}`;
+  paintChecks();renderDuts();glide();
+}
+/* The repairs are worth being able to read, and worth staying out of the way. */
+function renderSchemaPanel(){
+  const sc=backend.schema;if(!sc)return;
+  const n=sc.added.length+sc.note.length;
+  $('schemaCard').hidden=!n;
+  if(!n)return;
+  $('schemaN').textContent=`(${sc.added.length} filled in from the plugin${sc.note.length?`, ${sc.note.length} note${sc.note.length>1?'s':''}`:''})`;
+  $('schemaBody').innerHTML=
+    `<p class="note">This page carries its own copy of every injector's parameters, and the plugin is the authority. Anything missing here is generated from the plugin's schema at load, so a new injector or parameter shows up without waiting for this page to be edited. Controls marked <em>generated</em> have no hand-written description.</p>`
+    +(sc.added.length?`<p class="k" style="margin-top:12px">Filled in from the plugin</p>`+sc.added.map(d=>`<p class="note">· ${d}</p>`).join(''):'')
+    +(sc.note.length?`<p class="k" style="margin-top:12px">Offered here, not in the plugin's defaults</p>`+sc.note.map(d=>`<p class="note">· ${d}</p>`).join(''):'');
+}
+function renderAll(){renderPool();renderOutputs();saveLocal();scheduleAgentCheck()}
+
+/* ───────────────────────────── clock ─────────────────────────────
+   Wall time since Start, to the centisecond. The readout beside it is the run's
+   own schedule T+, which steps a fault at a time and is not wall time. */
+function fmtCs(ms){
+  const cs=Math.max(0,Math.floor(ms/10)),s=Math.floor(cs/100);
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}.${String(cs%100).padStart(2,'0')}`;
+}
+const timer={t0:0,raf:0,
+  start(){this.stop();this.t0=performance.now();
+    const step=()=>{$('clock').textContent=fmtCs(performance.now()-this.t0);this.raf=requestAnimationFrame(step)};step()},
+  stop(){if(this.raf)cancelAnimationFrame(this.raf);this.raf=0},
+  reset(){this.stop();$('clock').textContent='0:00.00';$('schedT').textContent=''},
+};
+function schedClock(t){$('schedT').textContent=t===undefined?'':`schedule T+${fmtT(t)}`}
+
+/* ───────────────────────────── run strip ───────────────────────────── */
+const strip={
+  init(n,label){const w=$('stripWrap');w.hidden=!(n>1);$('stripK').textContent=label;
+    $('stripCells').innerHTML=Array.from({length:n},(_,i)=>`<div class="c" data-i="${i}"><span>${i+1}</span></div>`).join('')},
+  mark(i,cls){const c=$('stripCells').querySelector(`[data-i="${i}"]`);if(c){c.className='c '+cls}
+    const nx=$('stripCells').querySelector(`[data-i="${i+1}"]`);if(nx)nx.classList.add('now')},
+  reset(){$('stripWrap').hidden=true;$('stripCells').innerHTML=''},
+};
+
+/* ───────────────────────────── pinned lines ───────────────────────────── */
+function pin(cls,text){
+  const el=$('pinned');const div=document.createElement('div');div.className=cls;div.textContent=text;
+  el.appendChild(div);while(el.children.length>6)el.removeChild(el.firstChild);
+}
+
+/* The page carries its own copy of the plugin's vocabulary so it can validate a spec before a
+   run starts. That copy drifts every time the plugin renames something, and the symptom is a run
+   that dies at configure time. The backend imports the plugin and serves what it really accepts,
+   so the target lists and the invariant list come from the agent, and anything the page still
+   disagrees about is said out loud instead of discovered mid-demo. */
+async function syncWithAgent(){
+  let a;
+  try{const r=await fetch('api/plugin');if(!r.ok)return;a=await r.json()}catch(e){return}
+  if(!a||!a.ok){backend.drift=[`the runner could not load the plugin: ${a&&a.error||'unknown'}`];renderOutputs();return}
+  backend.agent=a;
+  if(a.targets&&a.targets.processes&&a.targets.containers){
+    TARGETS.processes=a.targets.processes;TARGETS.containers=a.targets.containers;
+    TARGETS.protected=a.targets.protected||[];
+    TARGET_OPTIONS.length=0;TARGET_OPTIONS.push(...Object.keys(TARGETS.processes),...TARGETS.containers);
+  }
+  // a check the plugin has and the page does not: add it under the group the plugin puts it in
+  const known=new Set(INVARIANTS.map(i=>i.k));
+  for(const k of a.invariants||[]){
+    if(known.has(k))continue;
+    INVARIANTS.push({k,d:'added by the plugin; see its docstring',g:(a.invariant_group||{})[k]||'parity'});
+  }
+  reconcileSchema(a);
+  buildChecks();renderConditions();renderEditor();renderAll();   // the agent may have added a check, so rebuild the contract panel
+}
+
+/* The catalogue below duplicates each injector's positional/defaults, and drift is silent: an
+   upstream rename leaves the page emitting a spec the plugin rejects, and a hand edit against a
+   reworded block can match nothing and report success. The plugin already publishes the schema,
+   so take structure from it and keep only the prose (label/desc/hint/type) here as an overlay.
+   Anything the plugin has and the page does not gets a plain control rather than vanishing. */
+function reconcileSchema(a){
+  /* Three kinds of disagreement, because they do not mean the same thing:
+       risk  — could make this page emit a spec that means something else (positional ORDER, a
+               wrong plugDef). Shown inline; it can silently corrupt a run.
+       added — the page was missing something and this repaired it from the schema. Worth a
+               count, not a lecture; the repair already happened.
+       note  — informational (a page-only field). Folded away.
+     Dumping all three into the blocker list, flat, read as "the page is broken" on first load. */
+  const risk=[],added=[],note=[];
+  for(const [name,meta] of Object.entries(a.injectors||{})){
+    if(!INJECTORS[name]){
+      INJECTORS[name]={title:name,short:'from the plugin',summary:`${name}: this console carries no description for it, so the controls below are generated from the plugin's own schema. See the injector's docstring for what the parameters mean.`,
+        example:`${name}=...`,positional:(meta.positional||[]).slice(),fields:[],generated:true};
+      added.push(`${name} — offered by the plugin and absent here, so the whole injector was built from its schema`);
+    }
+    const inj=INJECTORS[name];
+    // Positional ORDER is the dangerous one: specOf emits positionals bare and in order, so a
+    // stale order builds a spec the plugin parses as something else entirely.
+    if(Array.isArray(meta.positional)&&meta.positional.join()!==inj.positional.join()){
+      risk.push(`${name}: this page ordered its positionals [${inj.positional}] and the plugin expects [${meta.positional}] — every spec built here was being misread. Taken from the plugin.`);
+      inj.positional=meta.positional.slice();
+    }
+    for(const k of inj.positional){
+      if(inj.fields.some(f=>f.k===k))continue;
+      const isTarget=/^(process|target|container)$/.test(k);
+      inj.fields.push(isTarget
+        ?{k,type:'target',label:'Target',def:'orchagent',generated:true,desc:'generated from the plugin schema'}
+        :{k,type:'text',label:k,def:String((meta.defaults||{})[k]??''),generated:true,desc:'generated from the plugin schema'});
+      added.push(`${name}.${k} — a required positional with no control here; one was generated`);
+    }
+    const pageOnly=new Set(inj.fields.map(f=>f.k));
+    for(const [k,dv] of Object.entries(meta.defaults||{})){
+      const f=inj.fields.find(x=>x.k===k);
+      if(!f){
+        const num=/^-?\d+$/.test(String(dv));
+        inj.fields.push({k,type:num?'int':'text',label:k,def:num?+dv:dv,generated:true,
+          min:num?0:undefined,max:num?100000:undefined,desc:'generated from the plugin schema; this console has no description for it'});
+        added.push(`${name}.${k} — the plugin accepts it and this page had no control; one was generated`);
+        pageOnly.delete(k);continue;
+      }
+      // plugDef is what the plugin assumes when the key is omitted. specOf uses it to decide what
+      // to leave out, so a wrong one drops a value the plugin does not actually default to.
+      // Positionals are exempt: specOf always emits them, in order, so their plugDef is never
+      // consulted and a mismatch there is not a risk. Flagging it anyway put two frightening
+      // inline warnings on the page for something that could not affect a single spec.
+      const pd=f.plugDef!==undefined?f.plugDef:f.def;
+      if(!inj.positional.includes(k)&&String(pd)!==String(dv)){
+        const num=/^-?\d+$/.test(String(dv));
+        risk.push(`${name}.${k}: this page assumed the plugin defaults to ${JSON.stringify(pd)}, it defaults to ${JSON.stringify(dv)} — the value was being omitted from the spec when it should not be. Corrected.`);
+        f.plugDef=num?+dv:dv;
+      }
+      pageOnly.delete(k);
+    }
+    // A field offered here that the plugin has no DEFAULT for is not drift: optional parameters
+    // with no default (syslog's container) are legitimate and simply omitted when unset.
+  }
+  backend.schema={risk,added,note};
+}
+
+/* The plugin is the authority on whether a spec is acceptable. The local validator gives instant
+   feedback while a slider moves; this confirms it, so a run can never die at configure time for
+   a reason the page could have shown first. */
+let agentCheckSeq=0;
+async function checkSpecsWithAgent(){
+  if(!backend.ok)return;
+  const specs=[...new Set(state.pool.map(x=>specOf(x.name,x.p)))];
+  if(!specs.length){backend.specErrors={};return}
+  const seq=++agentCheckSeq;
+  try{
+    const r=await fetch('api/validate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({specs})});
+    if(!r.ok)return;
+    const j=await r.json();
+    if(seq!==agentCheckSeq)return;     // a newer edit already went out
+    const errs={};
+    if(j.ok===false)errs['__agent']=`the runner could not load the plugin: ${j.error}`;
+    for(const res of j.results||[])if(!res.ok)errs[res.spec]=res.error;
+    const changed=JSON.stringify(errs)!==JSON.stringify(backend.specErrors||{});
+    backend.specErrors=errs;
+    if(changed)renderOutputs();
+  }catch(e){}
+}
+let agentCheckTimer=0;
+function scheduleAgentCheck(){clearTimeout(agentCheckTimer);agentCheckTimer=setTimeout(checkSpecsWithAgent,350)}
+/* A run already in flight, started by another tab or another machine: attach to its stream so
+   this page can follow it and, above all, stop it. Several people share one runner. */
+function adoptRun(id,cmd){
+  resetDeck();timer.start();state.run={id,real:true,adopted:true};
+  $('stop').hidden=false;setRunPill('run','running '+id+', started elsewhere');$('logK').textContent='adopted';
+  log('sys','attached to run '+id+', already in progress');
+  if(cmd)log('sys','$ '+cmd);
+  const es=new EventSource('api/stream?id='+encodeURIComponent(id));state.run.es=es;
+  let fails=0;
+  es.addEventListener('line',e=>{const s=JSON.parse(e.data);
+    const cls=/FAILED|Traceback|Error|SIGABRT|divergen/i.test(s)?'fail':/PASSED|consistent|released/i.test(s)?'ok':/chaos|apply|inject/i.test(s)?'fault':/WARN/i.test(s)?'warn':'dim';
+    if(/invariant \w+ FAILED|contract: not recovered/.test(s))fails++;
+    log(cls,s);let m;
+    if((m=/^T\+(\d+):(\d+)/.exec(s)))schedClock(+m[1]*60+ +m[2]);
+    $('tFail').querySelector('.v').textContent=fails;$('tFail').className='tile '+(fails?'crit':'good')});
+  es.addEventListener('exit',e=>{const {code}=JSON.parse(e.data);es.close();log(code?'fail':'ok',`exit ${code}`);finish(code?'fail':'ok',`exited ${code}`)});
+  es.onerror=()=>{es.close();if(state.run)finish('','stream closed')};
+  renderOutputs();
+}
+
+/* ───────────────────────────── wiring ───────────────────────────── */
+function applyTheme(t){
+  const r=document.documentElement;
+  if(t==='system')r.removeAttribute('data-theme');else r.setAttribute('data-theme',t);
+  document.querySelectorAll('[data-theme-set]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.themeSet===t)));
+  glide();
+  try{localStorage.setItem('sonic-chaos-theme',t)}catch(e){}
+}
+function wire(){
+  ['seed','expName','tests','dryRun'].forEach(id=>{
+    $(id).addEventListener('input',renderAll);$(id).addEventListener('change',renderAll)});
+  $('dutSel').addEventListener('input',e=>{state.dut=e.target.value.trim();renderAll()});
+  $('dutSel').addEventListener('change',e=>{state.dut=e.target.value.trim();if(DUTS.some(x=>x.host===state.dut))setRecover(parseDur(dutOf().recover));renderEditor();renderAll()});
+  $('probeBase').addEventListener('click',()=>{probeBaseline().catch(e=>{$('baseHint').textContent=String(e)})});
+  $('reseed').addEventListener('click',()=>{$('seed').value=Math.floor(Math.random()*2**31);renderAll()});
+  $('modeFile').addEventListener('click',()=>{state.mode='file';renderAll()});
+  $('modeFlags').addEventListener('click',()=>{state.mode='flags';renderAll()});
+  $('baseline').addEventListener('change',e=>{state.baseline=e.target.checked;renderAll()});
+  $('presetSeg').innerHTML=Object.entries(PRESETS).map(([k,p])=>`<button type="button" data-preset="${k}">${p.label}</button>`).join('');
+  $('presetSeg').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    state.preset=b.dataset.preset;renderAll()}));
+  document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>goStep(+b.dataset.go)));
+  document.querySelectorAll('[data-copy]').forEach(b=>b.addEventListener('click',async()=>{
+    try{await navigator.clipboard.writeText($(b.dataset.copy).textContent);b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1200)}catch(e){}}));
+  $('start').addEventListener('click',()=>{if(problems().length)return;
+    (backend.ok?startReal():startSim()).catch(e=>{log('fail',String(e));finish('fail','error: '+e.message)})});
+  $('stop').addEventListener('click',stopRun);
+  document.querySelectorAll('[data-theme-set]').forEach(b=>b.addEventListener('click',()=>applyTheme(b.dataset.themeSet)));
+  addEventListener('resize',glide);
+  document.addEventListener('toggle',glide,true);   // `toggle` does not bubble: capture it
+  addEventListener('keydown',e=>{
+    if(/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName||''))return;
+    if(e.key==='ArrowRight'&&state.step===1)goStep(2);
+    if(e.key==='ArrowLeft'&&state.step===2)goStep(1);
+  });
+}
+
+/* ───────────────────────────── boot ───────────────────────────── */
+const DEMOS={
+  'orchagent-restart':{fault:{name:'kill',p:{process:'orchagent',how:'restart',settle:'60'}},inv:['route_check','critical_processes','no_cores']},
+  'sai-item-not-found':{fault:{name:'sai',p:{object_type:'vlan_member',op:'remove',status:'SAI_STATUS_ITEM_NOT_FOUND',count:'1',mode:'intercept'}},inv:['vlan_member','route_check','critical_processes']},
+  'cpu':{fault:{name:'cpu',p:{process:'orchagent',share:'10'}},inv:['route_check','key_set_backlog']},
+  'orchagent-livelock':{fault:{name:'spin',p:{process:'orchagent',percent:'100',ttl:'60'}},inv:['route_check','key_set_backlog','critical_processes']},
+};
+function boot(){
+  let theme='dark';try{theme=localStorage.getItem('sonic-chaos-theme')||'dark'}catch(e){}
+  applyTheme(theme);
+  const had=loadLocal();
+  // The editor opens on kill/orchagent so there is something to look at; the POOL starts empty.
+  // It used to be pre-seeded with a kill, and the first thing anyone does is tune a kill and press
+  // Add -- which made two, and the runner killed orchagent twice.
+  if(!had){state.pool=[];state.editing='kill';state.editParams={...defaults('kill'),process:'orchagent',how:'restart',settle:60}}
+  const demo=DEMOS[new URLSearchParams(location.search).get('preset')||''];
+  if(demo){
+    state.dut=demo.dut||state.dut;state.pool=[{id:'d1',...demo.fault,p:{...defaults(demo.fault.name),...demo.fault.p}}];
+    state.inv=new Set(demo.inv);state.invGroup=Object.keys(GROUPS).find(g=>groupWord(state.inv,g))||'all';state.mode='flags';
+  }
+  state.repeat=state.repeat||1;
+  state.editParams=defaults(state.editing);
+  renderConditions();renderEditor();buildChecks();wire();
+  // a fresh session takes the selected platform's measured budget; a saved one keeps what was set
+  setRecover(parseDur(had?$('recoverWithin').value:dutOf().recover));
+  renderAll();resetDeck(false);
+  goStep(1);   // always open on Set up: a reload onto the empty Run screen reads as a blank page
+  glide();document.fonts?.ready.then(glide);   // the display face lands after first layout
+  probeBackend();
+}
+/* ───────────────────────────── run deck ───────────────────────────── */
+const logEl=$('log');
+function log(cls,msg,t){const ts=t!==undefined?`T+${fmtT(t)}`:new Date().toTimeString().slice(0,8);
+  logEl.insertAdjacentHTML('beforeend',`<span class="ln ${cls==='fail'?'lv-fail hl':'lv-'+cls}"><span class="ts">${ts}</span>  ${msg.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span>`);
+  if(logEl.scrollHeight-logEl.scrollTop-logEl.clientHeight<80)logEl.scrollTop=logEl.scrollHeight;
+  if(/^\s*(File "|raise |Traceback|  \^)/.test(msg))return;   // traceback frames are noise on the pinned rail
+  if(cls==='fault'||cls==='fail'||/verdict|steady_state|recovered|exit \d/.test(msg))pin(cls==='fail'?'fail':cls==='fault'?'fault':'ok',msg);}
+function setRunPill(cls,text){$('runPill').className='pill '+cls;$('runText').textContent=text;$('runtop').classList.toggle('live',cls==='run')}
+function setInvState(rows){
+  const bad=rows.filter(r=>r.s==='fail'),waiting=rows.some(r=>r.s==='wait');
+  const head=bad.length?`<span class="badge fail">${bad.length} of ${rows.length} diverged</span>`
+    :waiting?`<span class="badge wait">checking ${rows.length}</span>`
+    :rows.length&&rows[0].s==='ok'?`<span class="badge ok">${rows.length} of ${rows.length} consistent</span>`
+    :`<span class="badge">${rows.length} armed</span>`;
+  $('invState').innerHTML=head+bad.map(r=>`<code>${r.k}</code>`).join(' ');}
+function resetDeck(nav=true){if(nav)goStep(2);timer.reset();$('pinned').innerHTML='';strip.reset();$('simChip').hidden=true;logEl.innerHTML='';$('findings').innerHTML='';$('tFail').className='tile';$('tFail').querySelector('.v').textContent='—';$('tFaults').querySelector('.v').textContent='—';
+  state.evidence={status:{},fired:[],tele:[],ab:{idle:{},fault:{}}};
+  $('tBit').className='tile';$('tBit').querySelector('.v').textContent='—';$('tBit').querySelector('.sub').textContent='from the injector’s own status(), not the log';
+  $('tTele').hidden=true;$('verdictBox').innerHTML='';
+  setInvState([...state.inv].map(k=>({k,s:'',label:'not yet'})))}
+
+/* ── evidence: did the fault actually do anything? ─────────────────────────────────────────
+   Every injector's status() carries a number that says whether it bit -- hog/cpu `bit`,
+   exhaust `accepted`/`leaked`, storm `flaps`, sai `injected` -- and the console used to print
+   it as a log line and grade the run on invariants alone. A fault that never landed then looked
+   identical to a pass. That is a manufactured false negative, the same failure the stubs had. */
+function bitOf(name,st){
+  if(!st)return null;
+  switch(name){
+    case 'hog': case 'cpu': return st.bit===true?true:st.bit===false?false:null;
+    case 'exhaust':{const acc=st.accepted??(st.peak!=null&&st.baseline!=null?st.peak-st.baseline:null);return acc==null?null:acc>0}
+    case 'storm': return st.flaps==null?null:st.flaps>0;
+    case 'sai': if(st.mode==='freeze'||st.frozen!==undefined)return !!(st.frozen||st.active);
+      {const a=st.achieved||{};return (st.hooked||[]).length?((a.injected||0)+(a.matched||0))>0:null}
+    case 'mem': return st.active==null?null:!!st.active;
+    default: return true;   // kill/pause/redis/corrupt/syslog are events: applied means it happened
+  }
+}
+function bitLabel(name,st){
+  if(!st)return '';
+  if(name==='exhaust')return `${st.accepted??'?'} accepted${st.refused?`, ${st.refused} refused`:''}${st.leaked!=null?` · leaked ${st.leaked}`:''}`;
+  if(name==='storm')return `${st.flaps??'?'} flaps${st.enobufs_new?` · ${st.enobufs_new} ENOBUFS`:''}${st.neighbours_lost?` · ${st.neighbours_lost} neighbours lost`:''}`;
+  if(name==='sai'){const a=st.achieved||{};return st.mode==='freeze'?'syncd frozen':`hooked ${(st.hooked||[]).join(',')||'nothing'} · ${a.injected||0} injected of ${a.calls||0} calls`}
+  if(name==='hog'||name==='cpu'){const a=st.achieved||{};return st.bit?`throttled ${a.throttles_since_apply??a.throttled_usec??''}`.trim():'never wanted the CPU the cap allowed'}
+  if(name==='kill'||name==='pause'){const a=st.achieved||{};return a.recovered_now===false?(a.start_limit_hit?'target DOWN — systemd start limit hit':'target still down'):a.recovered===false?'came back, but after the settle':`back in ${a.after_s??'?'}s`}
+  return '';
+}
+function renderBit(){
+  const ev=state.evidence;const names=Object.keys(ev.status);
+  const bits=names.map(n=>bitOf(n,ev.status[n]));
+  const t=$('tBit');const v=t.querySelector('.v'),sub=t.querySelector('.sub');
+  if(!names.length){return}
+  const anyTrue=bits.some(b=>b===true),anyFalse=bits.some(b=>b===false),measured=bits.some(b=>b!==null);
+  t.className='tile '+(anyTrue?'good':anyFalse?'amber':'');
+  v.textContent=anyTrue?'yes':anyFalse?'no':'—';
+  sub.textContent=names.map(n=>`${n}: ${bitLabel(n,ev.status[n])||(bitOf(n,ev.status[n])===null?'not measured':'')}`).filter(Boolean).join(' · ')||sub.textContent;
+  return {anyTrue,anyFalse,measured};
+}
+/* Three states, because "the fault never landed" and "the fault landed and nothing broke" are
+   different results and only one of them tested anything. */
+function renderVerdict(fails,code){
+  const ev=state.evidence;
+  const b=renderBit()||{anyTrue:false,anyFalse:false,measured:false};
+  let cls,head,why;
+  const never=Object.entries(ev.status).filter(([n,st])=>st&&st.achieved&&st.achieved.recovered_now===false);
+  if(never.length){cls='crit';
+    const lim=never.some(([n,st])=>st.achieved.start_limit_hit);
+    head=`BIT · ${never.map(([n])=>n).join(', ')} target never came back`;
+    why=lim?'systemd hit its start limit for the container and has stopped trying. The switch is down until someone runs systemctl reset-failed swss && systemctl start swss. This is the finding — and the box needs a hand.'
+           :'The fault landed and the target is still down at check time. That is the finding; the invariants below were checked against a box missing a daemon.';}
+  else if(fails>0){cls='crit';
+    head=b.anyTrue?'BIT · an invariant broke':'INVARIANT BROKE · but nothing reports biting';
+    why=b.anyTrue?'The fault landed and the box diverged. This is a finding.':'An invariant broke while no injector reports having affected its target. Check whether the divergence pre-dates the fault — the steady-state column on the left is the control.'}
+  else if(b.anyTrue){cls='good';head='BIT · invariants held';why='The fault demonstrably landed (see Fault bit?) and every armed invariant stayed consistent.'}
+  else if(b.measured){cls='amber';head='DID NOT BITE';why='The injector reports it never affected the target -- an idle daemon under a cap, a table that never filled, a hook that never fired. Invariants passing here proves nothing. Give the target work, or pick a harsher setting.'}
+  else{cls='';head=code?`exited ${code}`:'no fault evidence';why='No status() line reached the console, so whether the fault bit is unknown. Older plugin, or the run ended before settle.'}
+  $('verdictBox').innerHTML=`<div class="verdict ${cls}"><b>${head}</b><span class="why">${why}</span></div>`;
+  return {cls,head};
+}
+/* ── A/B: the steady-state gate IS the control. Show it beside the under-fault result. ─── */
+function renderAB(){
+  const ev=state.evidence;const keys=[...new Set([...state.inv,...Object.keys(ev.ab.idle),...Object.keys(ev.ab.fault)])];
+  if(!keys.length)return;
+  const cell=(m)=>m===undefined?'<td class="na">not run</td>':m==='pass'?'<td class="ok">consistent</td>':`<td class="fail">${m}</td>`;
+  const rows=keys.map(k=>`<tr><td><code>${k}</code></td>${cell(ev.ab.idle[k])}${cell(ev.ab.fault[k])}</tr>`).join('');
+  const old=$('invState').querySelector('table.ab');if(old)old.remove();
+  $('invState').insertAdjacentHTML('beforeend',`<table class="ab"><thead><tr><th>invariant</th><th>idle (steady state)</th><th>under fault</th></tr></thead><tbody>${rows}</tbody></table>`);
+}
+/* ── live telemetry from the runner's own connection, no second ssh session ────────────── */
+function renderTele(){
+  const ev=state.evidence;const pts=ev.tele;if(!pts.length)return;
+  const t=$('tTele');t.hidden=false;
+  const last=pts[pts.length-1];
+  const drain=last.asic_delta===undefined?'':` · ASIC ${last.asic_delta>=0?'+':''}${last.asic_delta}`;
+  t.querySelector('.v').innerHTML=`${last.cpu_pct}<small>% cpu · ${last.mem_mb} MB${drain}</small>`;
+  const capM=/cpu=(\d+)/.exec(buildCmd());const cap=capM?+capM[1]*(+(/cores=(\d+)/.exec(buildCmd())||[0,1])[1]):null;
+  const W=200,H=38,n=pts.length;const xs=(i)=>n<2?W:i*W/(n-1);
+  const cmax=Math.max(cap||0,...pts.map(p=>p.cpu_pct),10),mmax=Math.max(...pts.map(p=>p.mem_mb),1);
+  const cpu=pts.map((p,i)=>`${xs(i).toFixed(1)},${(H-2-(p.cpu_pct/cmax)*(H-4)).toFixed(1)}`).join(' ');
+  const mem=pts.map((p,i)=>`${xs(i).toFixed(1)},${(H-2-(p.mem_mb/mmax)*(H-4)).toFixed(1)}`).join(' ');
+  const capY=cap?(H-2-(cap/cmax)*(H-4)).toFixed(1):null;
+  t.querySelector('svg').innerHTML=`${capY?`<line class="cap" x1="0" x2="${W}" y1="${capY}" y2="${capY}"/>`:''}<polyline class="mem" points="${mem}"/><polyline class="cpu" points="${cpu}"/>`;
+  t.querySelector('.sub').textContent=`${n} samples · cpu solid, memory dashed${cap?` · cap ${cap}% dotted`:''}${last.asic_delta===undefined?'':` · ASIC objects programmed per sample`} · from cgroup cpu.stat / dbsize`;
+}
+function finish(status,summary){
+  state.run=null;timer.stop();$('stop').hidden=true;$('start').disabled=false;
+  setRunPill(status==='fail'?'fail':status==='ok'?'ok':status==='amber'?'amber':'',summary);
+  $('logK').textContent=summary;$('deckMeta').textContent=`Last run: ${summary}`;
+  renderOutputs();
+}
+
+/* Real run: POST the command to the local runner, stream its stdout. */
+async function startReal(){
+  const f=form();const body=runRequest();
+  resetDeck();timer.start();$('simChip').hidden=true;strip.init(f.repeat,'Each cell is one repeat run, in order');
+  const r=await fetch('api/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok||!j.ok||!j.id){const why=j.error||`HTTP ${r.status}`;log('fail',`runner refused: ${why}`);finish('fail','runner refused: '+why);return}
+  const {id}=j;state.run={id,real:true};if(Array.isArray(j.argv))log('sys','$ '+j.argv.join(' '));
+  $('stop').hidden=false;setRunPill('run','running · '+id);$('logK').textContent='Streaming from the runner.';
+  const es=new EventSource('api/stream?id='+encodeURIComponent(id));state.run.es=es;
+  let fails=0,fired=0;const realFindings=[];
+  es.addEventListener('line',e=>{const s=JSON.parse(e.data);
+    const cls=/FAILED|Traceback|Error|SIGABRT|divergen/i.test(s)?'fail':/PASSED|consistent|released/i.test(s)?'ok':/chaos|apply|inject/i.test(s)?'fault':/WARN/i.test(s)?'warn':'dim';
+    if(/invariant \w+ FAILED|^T\+\S+\s+run\d+ FAILED|contract: not recovered/.test(s))fails++;
+    log(cls,s);
+    let m;if((m=/chaos: apply\s+(\w+)[=(]([\w-]+)/.exec(s))){fired++;$('tFaults').querySelector('.v').innerHTML=`${fired}<small> fired</small>`;setInvState([...state.inv].map(k=>({k,s:'wait',label:'checking'})))}
+    if((m=/invariant (\w+) FAILED after (\S+): (.*)$/.exec(s))){setInvState([...state.inv].map(k=>({k,s:k===m[1]?'fail':'ok',label:k===m[1]?'diverged':'consistent'})));realFindings.push({ticket:'finding',sev:'',inv:m[1],text:m[3].slice(0,240),x:{name:m[2].split('=')[0],p:{}}});renderFindings(realFindings,form())}
+    if(/check: consistent|steady_state .*: pass/.test(s))setInvState([...state.inv].map(k=>({k,s:'ok',label:'consistent'})));
+    // evidence lines: the injector's own numbers, the runner's telemetry, and the A/B halves
+    if((m=/\bstatus (\w+): (\{.*\})\s*$/.exec(s))){try{state.evidence.status[m[1]]=JSON.parse(m[2]);renderBit()}catch(e){}}
+    if((m=/\btelemetry (\S+): (\{.*\})\s*$/.exec(s))){try{state.evidence.tele.push(JSON.parse(m[2]));renderTele()}catch(e){}}
+    if((m=/steady_state (\w+): pass/.exec(s))){state.evidence.ab.idle[m[1]]='pass';renderAB()}
+    if((m=/steady_state FAILED before any fault: (\w+)/.exec(s))){state.evidence.ab.idle[m[1]]='diverged';renderAB()}
+    if((m=/invariant (\w+) FAILED after/.exec(s))){state.evidence.ab.fault[m[1]]='diverged';renderAB()}
+    if(/check: consistent/.test(s)||/^T\+\S+\s+run\d+ PASSED/.test(s)){for(const k of state.inv)if(!state.evidence.ab.fault[k])state.evidence.ab.fault[k]='pass';renderAB()}
+    if((m=/^T\+(\d+):(\d+)/.exec(s)))schedClock(+m[1]*60+ +m[2]);
+    if((m=/verdict: (\d+) (faults|runs) \/ (\d+) FAIL/.exec(s)))fails=+m[3];
+    if((m=/^T\+\S+\s+run(\d+) (PASSED|FAILED)/.exec(s)))strip.mark(+m[1]-1,m[2]==='FAILED'?'fail':'ok');
+    else if(/FAILED/.test(s)&&!/verdict/.test(s))fails=Math.max(fails,(s.match(/FAILED/g)||[]).length?fails:fails);
+    $('tFail').querySelector('.v').textContent=fails;$('tFail').className='tile '+(fails?'crit':'good');});
+  /* The run is over the moment the runner exits, and the page must show that even if the panels
+     below it cannot be drawn. A throw between here and finish() used to leave the clock ticking
+     and Stop on screen over a switch with nothing applied to it, so the verdict is rendered
+     inside a guard and finish() runs either way. */
+  es.addEventListener('exit',e=>{const {code}=JSON.parse(e.data);es.close();log(code?'fail':'ok',`exit ${code}`);
+    let v={cls:'',head:code?`exited ${code}`:'run finished'};
+    try{v=renderVerdict(fails,code)||v;renderAB()}
+    catch(err){log('warn',`the verdict panel could not be drawn (${err&&err.message||err}); the run itself ended with exit ${code}`)}
+    const status=v.cls==='crit'?'fail':v.cls==='good'?'ok':v.cls==='amber'?'amber':(code?'fail':'ok');
+    finish(status,v.head+(code?` · exit ${code}`:''))});
+  es.onerror=()=>{es.close();if(state.run){log('warn','stream closed');finish('','stream closed')}};
+}
+async function stopRun(){
+  if(!state.run)return;
+  if(state.run.real){try{const r=await fetch('api/stop',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:state.run.id})});
+      const j=await r.json();log('warn',`runner stopped: ${(j.stopped||[]).join(', ')||'nothing was running'}${j.fell_back?' (this page held a stale run id, so the live run was stopped instead)':''}`)}catch(e){}state.run.es?.close();log('warn','stop requested: the plugin releases every applied fault LIFO on the way out');finish('','stopped by operator')}
+  else{state.run.stopped=true}
+}
+
+/* Simulated run: walks the exact seeded schedule at accelerated time. Output is labelled as simulated. */
+const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+async function startSim(){
+  const f=form();const d=dutOf();const sch=state.mode==='file'?schedule():[];
+  resetDeck();timer.start();state.run={real:false,stopped:false};$('stop').hidden=false;setRunPill('run','simulating');$('logK').textContent='simulated';$('simChip').hidden=false;
+  strip.init(state.mode==='file'?sch.length:f.repeat,state.mode==='file'?'Each cell is one scheduled fault, in seeded order':'Each cell is one repeat run, in order');
+  const rng=new PyRandom(f.seed^0x5eed);
+  const speed=(ms)=>sleep(Math.max(60,Math.min(ms,900)));
+  let t=0;const clock=(x)=>{t=x;schedClock(t)};
+  const findings=[];let fails=0;
+  const invRows=()=>[...state.inv].map(k=>({k,s:'ok',label:'consistent'}));
+  log('sys','$ '+buildCmd());log('warn','SIMULATION — the runner is offline. Fault order below is the real seeded schedule; outcomes are drawn from the regression set, not from a DUT.');
+  await speed(500);
+  log('dim',`chaos: plan resolved on ${d.host} (${d.hwsku}) · ${state.pool.length} condition(s) · seed ${f.seed}`,0);
+  if(f.dry){for(const s of sch)log('fault',`dry-run  T+${fmtT(s.t)}  ${specOf(s.f.name,s.f.p)}`,0);log('ok','dry run complete; nothing applied',0);finish('ok','dry run · plan printed');return}
+  // steady state gate
+  log('dim','check: snapshot APPL_DB + ASIC_DB + STATE_DB (5314 keys, ~14 s)',0);await speed(700);
+  for(const k of state.steady){log('ok',`steady_state ${k}: pass`,0);await speed(200)}
+  if(!state.steady.size)log('warn','steady_state: none configured — an already-broken box would be blamed on the first fault',0);
+  setInvState(invRows());
+  if(state.mode==='flags'){
+    // hold every fault for the whole run and repeat the module
+    for(const x of state.pool){log('fault',`chaos: apply ${specOf(x.name,x.p)} on ${d.host}`,0);await speed(400);
+      if(x.name==='cpu')log('dim',`cpu: sibling cgroup /sys/fs/cgroup/chaos-${x.p.process}, cpu.max ${+x.p.share*1000} 100000, pid moved; achieved ${(+x.p.share-0.9+rng.random()*1.4).toFixed(1)}%`,0)}
+    let flips=0;const runs=f.repeat;
+    for(let i=1;i<=runs;i++){if(state.run.stopped)break;
+      const dt=Math.round(30+rng.random()*30);clock(t+dt);
+      let hit=null;for(const x of state.pool){for(const k of KNOWN){if(k.when(x,d)&&rng.random()<k.p*(runs>1?0.35:1)){hit={k,x};break}}if(hit)break}
+      if(hit){flips++;fails++;const tk=typeof hit.k.ticket==='string'?hit.k.ticket:hit.k.ticket[hit.x.p.table];
+        setInvState([...state.inv].map(k=>({k,s:k===hit.k.inv?'fail':'ok',label:k===hit.k.inv?'diverged':'consistent'})));
+        log('fail',`${f.tests}::test[run${i}] FAILED  — ${hit.k.inv}: ${hit.k.text}`,t);
+        if(flips===1){findings.push({...hit.k,ticket:tk,x:hit.x});renderFindings(findings,f)}}
+      else log('ok',`${f.tests}::test[run${i}] PASSED`,t);
+      strip.mark(i-1,hit?'fail':'ok');
+      $('tFail').querySelector('.v').textContent=flips;$('tFail').className='tile '+(flips?'crit':'good');
+      await speed(runs>10?250:600);}
+    for(const x of [...state.pool].reverse()){log('dim',`chaos: release ${x.name} on ${d.host}`,t);await speed(150)}
+    $('tFaults').querySelector('.v').innerHTML=`${state.pool.length}<small> of ${state.pool.length}</small>`;
+    const summary=`${runs} runs / ${flips} FAIL${flips?` · repro: --chaos-seed ${f.seed}`:''}`;
+    finish(flips?'fail':'ok',(state.run?.stopped?'stopped · ':'')+summary);return;
+  }
+  // experiment mode: the seeded schedule
+  const evs=[];
+  const recover=parseDur(f.recover)||180;
+  for(let i=0;i<sch.length;i++){
+    if(state.run.stopped)break;
+    const s=sch[i];clock(s.t);evs[i]?.classList.add('now');
+    log('fault',`chaos: apply ${specOf(s.f.name,s.f.p)} on ${d.host}`,t);
+    await speed(500);
+    if(s.f.name==='kill')log('dim',`kill: ${s.f.p.how==='container'?`docker restart ${TARGETS.processes[s.f.p.process]?.c||s.f.p.process}`:s.f.p.how==='restart'?`docker exec ${TARGETS.processes[s.f.p.process]?.c} supervisorctl restart ${s.f.p.process}`:`docker exec ${TARGETS.processes[s.f.p.process]?.c} pkill -9 -x ${s.f.p.process}`}; settle ${s.f.p.settle}s`,t);
+    if(s.f.name==='pause')log('dim',`pause: ${isContainer(s.f.p.process)?'docker pause':'pkill -STOP -x'} ${s.f.p.process} for ${s.f.p.seconds}s`,t);
+    if(s.f.name==='redis')log('dim',s.f.p.action==='sleep'?`redis: sonic-db-cli ${s.f.p.db} DEBUG SLEEP ${(+s.f.p.target/1000).toFixed(2)}`:`redis: CLIENT KILL ${rng.randbelow(3)+1} connection(s) owned by ${s.f.p.target}`,t);
+    const settle=Math.min(recover,+(s.f.p.settle||s.f.p.seconds||20));clock(s.t+settle);
+    log('dim',`check: settle ${settle}s → snapshot + diff (denoised)`,t);await speed(500);
+    let hit=null;for(const k of KNOWN){if(k.when(s.f,d)&&rng.random()<k.p){hit=k;break}}
+    setInvState([...state.inv].map(k=>({k,s:'wait',label:'checking'})));await speed(300);
+    if(hit&&(state.inv.has(hit.inv)||hit.inv==='route_check'||!INVARIANTS.some(i=>i.k===hit.inv))){
+      fails++;const tk=typeof hit.ticket==='string'?hit.ticket:hit.ticket[s.f.p.table];
+      evs[i]?.classList.add('fail');
+      log('fail',`invariant ${hit.inv} FAILED after ${specOf(s.f.name,s.f.p)}: ${hit.text}`,t);
+      log('dim',`divergence ${hit.db} ${hit.key}`,t);
+      if(!findings.some(x=>x.ticket===tk&&x.x.name===s.f.name))findings.push({...hit,ticket:tk,x:s.f,t:s.t});
+      renderFindings(findings,f);
+      setInvState([...state.inv].map(k=>({k,s:k===hit.inv?'fail':'ok',label:k===hit.inv?'diverged':'consistent'})));
+      // recovery poll
+      const rec=Math.round(recover*(0.6+rng.random()*0.7));clock(s.t+settle+Math.min(rec,recover));
+      if(rec>recover)log('fail',`contract: not recovered within ${f.recover} — ${d.cls==='hw'?'orchagent did not respawn; needs config reload':'still diverged'}`,t);
+      else log('warn',`contract: recovered after ${rec}s (budget ${f.recover})`,t);
+    }else{
+      log('ok',`check: consistent · ${[...state.inv].join(', ')||'no invariants'} pass · idle diff 0`,t);
+      setInvState(invRows());
+    }
+    evs[i]?.classList.remove('now');evs[i]?.classList.add('done');strip.mark(i,hit?'fail':'ok');
+    $('tFaults').querySelector('.v').innerHTML=`${i+1}<small> of ${sch.length}</small>`;
+    $('tFail').querySelector('.v').textContent=fails;$('tFail').className='tile '+(fails?'crit':'good');
+    await speed(350);
+  }
+  clock(parseDur(f.duration)||t);
+  log('dim','chaos: release_all (LIFO) — nothing left applied',t);
+  const summary=`${sch.length} faults / ${fails} FAIL · ${findings.length} finding${findings.length===1?'':'s'}${fails?` · repro: --chaos-seed ${f.seed}`:''}`;
+  finish(fails?'fail':'ok',(state.run?.stopped?'stopped · ':'')+summary);
+}
+function renderFindings(list,f){
+  const sim=state.run?!state.run.real:!backend.ok;
+  $('findings').innerHTML=list.map(x=>`<div class="finding">
+      <div class="top"><span class="tk">${x.ticket}</span>${sim?'<span class="simtag">SIMULATED</span>':''}<span class="meta">${[x.sev,x.inv].filter(Boolean).join(' · ')}</span></div>
+      ${x.text}
+      <div class="repro">${buildCmd().replace(/^.*?(python3|pytest)/,'$1')}</div></div>`).join('');
+}
+
+
+
+
+boot();
+</script>

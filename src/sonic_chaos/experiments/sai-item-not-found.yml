@@ -1,0 +1,55 @@
+# stale-member: a VLAN member remove comes back ITEM_NOT_FOUND, orchagent swallows it, and the
+# stale ASIC_DB entry left behind re-arms the crash on the next orchagent restart.
+#
+# The bug needs the vendor SAI to produce that status, which is why it was only ever seen on
+# DNX hardware. The shim produces it on demand, so the same repro runs on VS:
+#
+#   pytest tests/pc/test_po_update.py \
+#       --chaos-file .../experiments/sai-item-not-found.yml
+#
+# What to look for: the oracle's vlan_member invariant after the second fault. APPL_DB will
+# have dropped the member; ASIC_DB will still have it. That invariant is what turns the
+# injected error into a verdict -- the shim only makes the ASIC say ITEM_NOT_FOUND, the oracle
+# is what notices orchagent swallowed it.
+#
+# First run on a given box restarts syncd once, to get the shim in front of the vendor
+# library -- on hardware that is itself a dataplane event. Later runs do not.
+
+experiment: sai-item-not-found
+seed: 20260911
+duration: 6m
+min_gap: 90s
+
+steady_state:
+  - critical_processes
+  - vlan_member
+  - route_check
+  - key_set_backlog
+
+faults:
+  # Fail exactly one remove. Unlimited would be a different, much blunter test: we want the
+  # single swallowed error and the one stale entry, not a switch that can never delete.
+  - sai:
+      object_type: vlan_member
+      op: remove
+      status: SAI_STATUS_ITEM_NOT_FOUND
+      count: 1
+      weight: 3
+      tag: supported-op     # the ASIC really can answer this; we are only making it certain
+
+  # Then restart orchagent. The stale entry is harmless until something rebuilds the view.
+  - kill:
+      process: orchagent
+      how: restart
+      settle: 60
+      weight: 1
+      tag: unsupported-op
+
+contract:
+  recover_within: 180s
+  invariants:
+    - vlan_member        # the one that catches this bug: APPL_DB dropped it, ASIC_DB kept it
+    - critical_processes
+    - no_cores
+    - route_check
+    - key_set_backlog

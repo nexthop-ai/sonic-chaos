@@ -1,0 +1,17 @@
+# golden transcript: mem-ramp-bare
+# spec: mem=swss:40:ramp=20
+# box: bare
+# injector: mem(container=swss,interval=5,period=30,process=swss,ramp=20,settle=5,share=40,ttl=900)
+== apply
+shell: id -u
+shell: sudo -n mkdir -p /tmp/sonic-chaos && sudo -n chmod 1777 /tmp/sonic-chaos
+shell: md5sum /tmp/sonic-chaos/chaos_agent.py 2>/dev/null | cut -d' ' -f1
+copy: src <pkg>/agent/chaos_agent.py -> /tmp/sonic-chaos/chaos_agent.py mode=0755
+shell: sudo -n python3 /tmp/sonic-chaos/chaos_agent.py apply --container swss --interval 5 --kind mem --period 30 --settle 5 --steps 80,60,40 --target swss --ttl 900
+!! apply raised SqueezeError: [squeeze] agent apply produced no JSON on dut1: rc=0 stderr=''
+== status
+shell: sudo -n python3 /tmp/sonic-chaos/chaos_agent.py status --kind mem --target swss
+-> {"active": false, "error": "[squeeze] agent status produced no JSON on dut1: rc=0 stderr=''", "recovered": null, "steps": [80, 60, 40]}
+== release
+shell: sudo -n python3 /tmp/sonic-chaos/chaos_agent.py release --kind mem --target swss
+!! release raised SqueezeError: [mem] swss may still be capped on dut1: [squeeze] agent release produced no JSON on dut1: rc=0 stderr=''
